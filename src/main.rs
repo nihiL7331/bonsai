@@ -1,6 +1,7 @@
 use clap::{Parser, Subcommand};
 use colored::*;
 
+mod assets;
 mod build;
 mod commands;
 mod error;

@@ -1,3 +1,4 @@
+use crate::assets::generate_font_metadata;
 use crate::error::CustomError;
 use crate::manifest::{Manifest, update_manifest};
 use crate::packer::pack_atlas;
@@ -10,7 +11,6 @@ use std::{env, fs};
 
 // general
 const ASSETS_DIR: &str = "assets";
-const GAME_DIR: &str = "source/types/game";
 const IMAGES_DIR: &str = "assets/images";
 const SHADERS_SRC: &str = "source/shaders/shader.glsl";
 const SHADERS_OUT: &str = "source/shaders/shader.odin";
@@ -54,12 +54,8 @@ fn prepare_resources(verbose: bool) -> Result<(), CustomError> {
     check_dependencies()?;
     run_utils(verbose)?;
     update_manifest(Path::new("."))?;
-    pack_atlas(
-        Path::new(ASSETS_DIR),
-        Path::new(GAME_DIR),
-        Path::new(IMAGES_DIR),
-        verbose,
-    )?;
+    pack_atlas(Path::new(ASSETS_DIR), Path::new(IMAGES_DIR), verbose)?;
+    generate_font_metadata()?;
     compile_shaders(verbose)?;
     Ok(())
 }
