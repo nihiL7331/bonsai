@@ -1,4 +1,4 @@
-use crate::assets::generate_font_metadata;
+use crate::assets::generate_assets;
 use crate::error::CustomError;
 use crate::manifest::{Manifest, update_manifest};
 use crate::packer::pack_atlas;
@@ -43,6 +43,7 @@ const EMSCRIPTEN_FLAGS: &str = "-sWASM_BIGINT \
 -sASSERTIONS \
 --shell-file source/core/platform/web/index.html \
 --preload-file assets/images/atlas.png \
+--preload-file assets/audio \
 --preload-file assets/fonts";
 
 pub struct BuildResult {
@@ -55,7 +56,7 @@ fn prepare_resources(verbose: bool) -> Result<(), CustomError> {
     run_utils(verbose)?;
     update_manifest(Path::new("."))?;
     pack_atlas(Path::new(ASSETS_DIR), Path::new(IMAGES_DIR), verbose)?;
-    generate_font_metadata()?;
+    generate_assets()?;
     compile_shaders(verbose)?;
     Ok(())
 }
@@ -68,6 +69,7 @@ fn get_c_libraries() -> Vec<String> {
         "source/libs/sokol/shape/sokol_shape_wasm_gl_release.a".to_string(),
         "source/libs/sokol/log/sokol_log_wasm_gl_release.a".to_string(),
         "source/libs/sokol/gl/sokol_gl_wasm_gl_release.a".to_string(),
+        "source/libs/sokol/audio/sokol_audio_wasm_gl_release.a".to_string(),
         "source/libs/stb/lib/stb_image_wasm.o".to_string(),
         "source/libs/stb/lib/stb_image_write_wasm.o".to_string(),
         "source/libs/stb/lib/stb_rect_pack_wasm.o".to_string(),

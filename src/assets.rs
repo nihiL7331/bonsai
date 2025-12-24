@@ -7,8 +7,12 @@ use texture_packer::TexturePacker;
 const SPRITE_OUTPUT_DIR: &str = "source/types/game/generated_sprite.odin";
 //font
 const FONT_SRC_DIR: &str = "assets/fonts";
-const FONT_OUTPUT_DIR: &str = "source/types/game/generated_font.odin";
+const FONT_OUT_DIR: &str = "source/types/game/generated_font.odin";
+//audio
+const AUDIO_SRC_DIR: &str = "assets/audio";
+const AUDIO_OUT_DIR: &str = "source/types/game/generated_audio.odin";
 
+//this is separated from generate_asset_metadata, since there's a lot of "custom" logic here
 pub fn generate_sprite_metadata(
     packer: &TexturePacker<image::RgbaImage, String>,
     width: u32,
@@ -67,17 +71,30 @@ pub fn generate_sprite_metadata(
     Ok(())
 }
 
-pub fn generate_font_metadata() -> Result<(), CustomError> {
-    let font_dir = Path::new(FONT_SRC_DIR);
-    let output_file = Path::new(FONT_OUTPUT_DIR);
+pub fn generate_assets() -> Result<(), CustomError> {
+    generate_asset_metadata(FONT_SRC_DIR, FONT_OUT_DIR, "ttf", "Font")?;
+    generate_asset_metadata(AUDIO_SRC_DIR, AUDIO_OUT_DIR, "wav", "Audio")?;
+    Ok(())
+}
+
+fn generate_asset_metadata(
+    asset_src: &str,
+    asset_out: &str,
+    ext: &str,
+    enum_name: &str,
+) -> Result<(), CustomError> {
+    let asset_dir = Path::new(asset_src);
+    let output_file = Path::new(asset_out);
 
     let mut entries = vec![];
-    if font_dir.exists() {
-        for entry in fs::read_dir(font_dir)? {
+    if asset_dir.exists() {
+        for entry in fs::read_dir(asset_dir)? {
             let entry = entry?;
             let path = entry.path();
-            if path.extension().and_then(|s| s.to_str()) == Some("ttf") {
-                let stem = path.file_stem().unwrap().to_str().unwrap();
+            if path.extension().and_then(|s| s.to_str()) == Some(ext) {
+                let stem = path.file_stem().unwrap().to_str().unwrap(); // this unwrapping is
+                // ugly and might cause silent errors, TODO: replace that with proper error
+                // handling
                 let clean_stem = stem.replace("-", "_").replace(" ", "_");
                 let filename = path.file_name().unwrap().to_str().unwrap().to_string();
                 entries.push((clean_stem, filename));
@@ -89,7 +106,7 @@ pub fn generate_font_metadata() -> Result<(), CustomError> {
 
     odin_code.push_str("package game_types\n\n");
 
-    odin_code.push_str("FontName :: enum {\n");
+    odin_code.push_str(&format!("{}Name :: enum {{\n", enum_name));
     odin_code.push_str("\tnil,\n");
     for (name, _) in &entries {
         odin_code.push_str(&format!("\t{}, \n", name));
@@ -97,7 +114,11 @@ pub fn generate_font_metadata() -> Result<(), CustomError> {
     odin_code.push_str("}\n\n");
 
     //map for gen
-    odin_code.push_str("fontFilename := [FontName]string {\n");
+    odin_code.push_str(&format!(
+        "{}Filename := [{}Name]string {{\n",
+        enum_name.to_lowercase(),
+        enum_name
+    ));
     odin_code.push_str("\t.nil = \"\",\n");
     for (name, file) in &entries {
         odin_code.push_str(&format!("\t.{} = \"{}\",\n", name, file));
