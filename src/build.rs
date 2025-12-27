@@ -462,18 +462,22 @@ fn run_utils(verbose: bool) -> Result<(), CustomError> {
         return Ok(());
     }
 
-    let utils_status = Command::new("odin")
-        .args(&["run", "./utils"])
-        .stdout(Stdio::inherit())
-        .stderr(Stdio::inherit())
-        .status()
-        .map_err(|_| CustomError::BuildError("Failed to run utils".into()))?;
+    if dir_contains("./utils", "odin") {
+        let utils_status = Command::new("odin")
+            .args(&["run", "./utils"])
+            .stdout(Stdio::inherit())
+            .stderr(Stdio::inherit())
+            .status()
+            .map_err(|_| CustomError::BuildError("Failed to run utils".into()))?;
 
-    if !utils_status.success() {
-        return Err(CustomError::BuildError("Utils script failed".into()));
-    }
-    if verbose {
-        println!("{} Running utility scripts...", "[INFO]".green());
+        if !utils_status.success() {
+            return Err(CustomError::BuildError("Utils script failed".into()));
+        }
+        if verbose {
+            println!("{} Running utility scripts...", "[INFO]".green());
+        }
+    } else if verbose {
+        println!("{} No odin utility files found.", "[INFO]".green());
     }
     for entry in fs::read_dir(utils_dir).map_err(CustomError::IoError)? {
         let entry = entry.map_err(CustomError::IoError)?;
@@ -621,4 +625,28 @@ fn run_with_prefix(
     }
 
     Ok(())
+}
+
+fn dir_contains(dir_path: &str, ext: &str) -> bool {
+    let path = Path::new(dir_path);
+
+    if !path.exists() || !path.is_dir() {
+        return false;
+    }
+
+    if let Ok(entries) = fs::read_dir(path) {
+        for entry in entries.flatten() {
+            let path = entry.path();
+
+            if path.is_file() {
+                if let Some(file_ext) = path.extension() {
+                    if file_ext == ext {
+                        return true;
+                    }
+                }
+            }
+        }
+    }
+
+    false
 }
