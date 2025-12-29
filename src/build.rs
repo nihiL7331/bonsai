@@ -44,7 +44,8 @@ const EMSCRIPTEN_FLAGS: &str = "-sWASM_BIGINT \
 --shell-file source/core/platform/web/index.html \
 --preload-file assets/images/atlas.png \
 --preload-file assets/audio \
---preload-file assets/fonts";
+--preload-file assets/fonts \
+--preload-file assets/worlds";
 
 pub struct BuildResult {
     pub executable_path: PathBuf,
@@ -106,6 +107,7 @@ fn compile_shaders(verbose: bool) -> Result<(), CustomError> {
         ],
         "[SHDC]",
         colored::Color::Cyan,
+        verbose,
     )?;
 
     Ok(())
@@ -160,6 +162,7 @@ fn compile_project(
         &args.iter().map(|s| s.as_ref()).collect::<Vec<&str>>(),
         "[ODIN]",
         colored::Color::Blue,
+        verbose,
     )?;
 
     Ok(out_path)
@@ -495,6 +498,7 @@ fn run_utils(verbose: bool) -> Result<(), CustomError> {
                         &[path.to_str().unwrap()],
                         "[PYTHON]",
                         colored::Color::Yellow,
+                        verbose,
                     )
                     .or_else(|_| {
                         run_with_prefix(
@@ -502,6 +506,7 @@ fn run_utils(verbose: bool) -> Result<(), CustomError> {
                             &[path.to_str().unwrap()],
                             "[PYTHON]",
                             colored::Color::Yellow,
+                            verbose,
                         )
                     })?;
                 }
@@ -581,7 +586,15 @@ fn run_with_prefix(
     args: &[&str],
     prefix: &str,
     color: colored::Color,
+    verbose: bool,
 ) -> Result<(), CustomError> {
+    if verbose {
+        println!(
+            "{}",
+            format!("{} Running script with args: {}...", prefix, args.join(" "))
+        )
+    }
+
     let mut child = Command::new(cmd)
         .args(args)
         .stdout(Stdio::piped())

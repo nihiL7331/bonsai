@@ -1,4 +1,5 @@
 use crate::error::CustomError;
+use std::collections::HashSet;
 use std::fs;
 use std::path::Path;
 use texture_packer::TexturePacker;
@@ -26,6 +27,7 @@ pub fn generate_sprite_metadata(
     packer: &TexturePacker<image::RgbaImage, String>,
     width: u32,
     height: u32,
+    extruded_sprites: &HashSet<String>,
 ) -> Result<(), CustomError> {
     let mut odin_code = String::new();
 
@@ -48,23 +50,30 @@ pub fn generate_sprite_metadata(
 
     odin_code.push_str("getSpriteData :: proc(sprite: SpriteName) -> SpriteData {\n");
     odin_code.push_str("\tswitch sprite {\n");
-    let w = width as f32;
-    let h = height as f32;
     odin_code.push_str("\tcase .nil: return { gmath.Vec4{0, 0, 0, 0}, gmath.Vec2{0, 0} }\n");
     for (key, frame) in packer.get_frames() {
         let clean_key = key.replace("-", "_").replace(" ", "_");
 
-        let u0 = frame.frame.x as f32 / w;
-        let v0 = frame.frame.y as f32 / h;
-        let u1 = (frame.frame.x + frame.frame.w) as f32 / w;
-        let v1 = (frame.frame.y + frame.frame.h) as f32 / h;
+        let mut x = frame.frame.x;
+        let mut y = frame.frame.y;
+        let mut w = frame.frame.w;
+        let mut h = frame.frame.h;
 
-        let px_w = frame.frame.w as f32;
-        let px_h = frame.frame.h as f32;
+        if extruded_sprites.contains(key) {
+            x += 1;
+            y += 1;
+            w -= 2;
+            h -= 2;
+        }
+
+        let u0 = x as f32 / width as f32;
+        let v0 = y as f32 / height as f32;
+        let u1 = (x + w) as f32 / width as f32;
+        let v1 = (y + h) as f32 / height as f32;
 
         odin_code.push_str(&format!(
             "\tcase .{}: return {{ gmath.Vec4{{ {:.6}, {:.6}, {:.6}, {:.6} }}, gmath.Vec2{{ {:.1}, {:.1} }} }}\n",
-            clean_key, u0, v0, u1, v1, px_w, px_h
+            clean_key, u0, v0, u1, v1, w, h
         ));
     }
 

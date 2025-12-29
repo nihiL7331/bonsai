@@ -1,15 +1,20 @@
 use crate::assets::generate_sprite_metadata;
 use crate::error::CustomError;
 use colored::Colorize;
+use std::collections::HashSet;
 use std::fs::{self};
 use std::path::{Path, PathBuf};
 use texture_packer::{TexturePacker, TexturePackerConfig, exporter::ImageExporter};
 use walkdir::WalkDir;
 
 const ATLAS_NAME: &str = "atlas.png";
+const IMAGES_DIR_NAME: &str = "images";
+const TILESETS_DIR_NAME: &str = "tilesets";
+const DEFAULT_TILE_SIZE: u32 = 16;
 
 struct AtlasContext {
     images_dir: PathBuf,
+    tilesets_dir: PathBuf,
     atlas_path: PathBuf,
     atlas_dir: PathBuf,
     verbose: bool,
@@ -22,12 +27,14 @@ struct AtlasOutput {
 
 impl AtlasContext {
     fn new(assets_dir: &Path, atlas_dir: &Path, verbose: bool) -> Self {
-        let images_dir = assets_dir.join("images");
+        let images_dir = assets_dir.join(IMAGES_DIR_NAME);
+        let tilesets_dir = images_dir.join(TILESETS_DIR_NAME);
         let atlas_dir = PathBuf::from(atlas_dir);
         let atlas_path = atlas_dir.join(ATLAS_NAME);
 
         Self {
             images_dir,
+            tilesets_dir,
             atlas_path,
             atlas_dir,
             verbose,
@@ -62,57 +69,147 @@ pub fn pack_atlas(assets_dir: &Path, atlas_dir: &Path, verbose: bool) -> Result<
         ..Default::default()
     };
     let mut packer = TexturePacker::new_skyline(config);
-    collect_images(&ctx, &mut packer)?;
+    let mut extruded_sprites: HashSet<String> = HashSet::new();
+    let sorted_files = get_sorted_image_files(&ctx.images_dir)?;
+    process_images(&ctx, &sorted_files, &mut packer, &mut extruded_sprites)?;
     let output = write_atlas(&ctx, &packer)?;
-    generate_sprite_metadata(&packer, output.width, output.height)?;
+    generate_sprite_metadata(&packer, output.width, output.height, &extruded_sprites)?;
 
     Ok(())
 }
 
-fn collect_images(
-    ctx: &AtlasContext,
-    packer: &mut TexturePacker<image::RgbaImage, String>,
-) -> Result<(), CustomError> {
-    if !ctx.images_dir.exists() {
-        ctx.info("No 'images' folder found in assets. Skipping.");
-        return Ok(());
+fn get_sorted_image_files(dir: &Path) -> Result<Vec<PathBuf>, CustomError> {
+    let mut paths: Vec<PathBuf> = Vec::new();
+
+    if !dir.exists() {
+        return Ok(paths);
     }
 
-    for entry in WalkDir::new(&ctx.images_dir) {
+    for entry in WalkDir::new(dir) {
         let entry = entry.map_err(|e| CustomError::IoError(e.into()))?;
         let path = entry.path();
 
         if path.is_dir() {
             continue;
         }
-
         if path.file_name().and_then(|s| s.to_str()) == Some(ATLAS_NAME) {
             continue;
         }
-
         if path.extension().and_then(|s| s.to_str()) == Some("png") {
-            let stem = match path.file_stem().and_then(|s| s.to_str()) {
-                Some(s) => s,
-                None => continue,
-            };
+            paths.push(path.to_path_buf());
+        }
+    }
 
-            let key = stem.to_string();
+    paths.sort();
+    Ok(paths)
+}
 
-            let mut img = image::open(&path)
-                .map_err(|e| {
-                    CustomError::ValidationError(format!("Failed to load image {:?}: {}", path, e))
-                })?
-                .to_rgba8();
+fn process_images(
+    ctx: &AtlasContext,
+    files: &[PathBuf],
+    packer: &mut TexturePacker<image::RgbaImage, String>,
+    extruded_sprites: &mut HashSet<String>,
+) -> Result<(), CustomError> {
+    for path in files {
+        let file_name = path.file_name().and_then(|s| s.to_str()).unwrap();
+        let file_stem = path
+            .file_stem()
+            .and_then(|s| s.to_str())
+            .unwrap()
+            .to_string();
 
+        let mut img = image::open(path)
+            .map_err(|e| CustomError::ValidationError(format!("Failed to load {:?}: {}", path, e)))?
+            .to_rgba8();
+
+        let is_tileset = path.starts_with(&ctx.tilesets_dir);
+
+        if is_tileset {
+            ctx.info(format!("Slicing tileset found: {}", file_name));
+
+            let (tile_w, tile_h) = parse_grid_size_from_name(&file_stem)
+                .unwrap_or((DEFAULT_TILE_SIZE, DEFAULT_TILE_SIZE));
+
+            let cols = img.width() / tile_w;
+            let rows = img.height() / tile_h;
+
+            for y in 0..rows {
+                for x in 0..cols {
+                    let sub_img =
+                        image::imageops::crop_imm(&img, x * tile_w, y * tile_h, tile_w, tile_h)
+                            .to_image();
+
+                    let mut final_tile = sub_img;
+                    image::imageops::flip_vertical_in_place(&mut final_tile);
+
+                    let extruded_tile = extrude_tile(&final_tile);
+
+                    let tile_index = x + (y * cols);
+                    let key = format!("{}_{}", file_stem, tile_index);
+
+                    packer.pack_own(key.clone(), extruded_tile).map_err(|_| {
+                        CustomError::BuildError(format!(
+                            "Failed to pack tile '{}'. Atlas full?",
+                            key
+                        ))
+                    })?;
+
+                    extruded_sprites.insert(key);
+                }
+            }
+        } else {
             image::imageops::flip_vertical_in_place(&mut img);
-
-            packer.pack_own(key.clone(), img).map_err(|_| {
-                CustomError::BuildError(format!("failed to pack sprite '{}'. Atlas full?", key))
+            packer.pack_own(file_stem.clone(), img).map_err(|_| {
+                CustomError::BuildError(format!(
+                    "Failed to pack sprite '{}'. Atlas full?",
+                    file_stem
+                ))
             })?;
         }
     }
 
     Ok(())
+}
+
+//HACK: extrude edges of tiles by one pixel to ensure not getting tile seams
+fn extrude_tile(img: &image::RgbaImage) -> image::RgbaImage {
+    let (w, h) = img.dimensions();
+    let mut new_img = image::RgbaImage::new(w + 2, h + 2);
+    image::imageops::overlay(&mut new_img, img, 1, 1);
+
+    for x in 0..w {
+        let top_pixel = *img.get_pixel(x, 0);
+        let bottom_pixel = *img.get_pixel(x, h - 1);
+        new_img.put_pixel(x + 1, 0, top_pixel);
+        new_img.put_pixel(x + 1, h + 1, bottom_pixel);
+    }
+
+    for y in 0..h {
+        let left_pixel = *img.get_pixel(0, y);
+        let right_pixel = *img.get_pixel(w - 1, y);
+
+        new_img.put_pixel(0, y + 1, left_pixel);
+        new_img.put_pixel(w + 1, y + 1, right_pixel);
+    }
+
+    new_img.put_pixel(0, 0, *img.get_pixel(0, 0));
+    new_img.put_pixel(w + 1, 0, *img.get_pixel(w - 1, 0));
+    new_img.put_pixel(0, h + 1, *img.get_pixel(0, h - 1));
+    new_img.put_pixel(w + 1, h + 1, *img.get_pixel(w - 1, h - 1));
+
+    new_img
+}
+
+fn parse_grid_size_from_name(name: &str) -> Option<(u32, u32)> {
+    let parts: Vec<&str> = name.split('_').collect();
+    if let Some(last) = parts.last() {
+        if let Some((w, h)) = last.split_once('x') {
+            if let (Ok(width), Ok(height)) = (w.parse::<u32>(), h.parse::<u32>()) {
+                return Some((width, height));
+            }
+        }
+    }
+    None
 }
 
 fn write_atlas(
