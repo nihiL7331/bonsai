@@ -6,7 +6,7 @@ use colored::Colorize;
 use std::path::Path;
 use url::Url;
 
-const SYSTEMS_DIR: &str = "source/systems";
+const SYSTEMS_DIR: &str = "bonsai/systems";
 
 #[derive(Args)]
 pub struct InstallArgs {

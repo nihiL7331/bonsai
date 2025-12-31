@@ -8,12 +8,16 @@ use std::io::{BufRead, BufReader};
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::{env, fs};
+use walkdir::WalkDir;
 
 // general
 const ASSETS_DIR: &str = "assets";
 const IMAGES_DIR: &str = "assets/images";
-const SHADERS_SRC: &str = "source/shaders/shader.glsl";
-const SHADERS_OUT: &str = "source/shaders/shader.odin";
+const BONSAI_DIR: &str = "./bonsai";
+const GAME_DIR: &str = "./source/game";
+const SHADERS_BONSAI_SRC: &str = "bonsai/shaders/shader.glsl";
+const SHADERS_BONSAI_OUT: &str = "bonsai/shaders/shader.odin";
+const SHADERS_GAME_SRC: &str = "source/shaders";
 const SOURCE_DIR: &str = "source";
 // build
 const BUILD_SRC: &str = "build";
@@ -25,7 +29,7 @@ const DESKTOP_BINARY_NAME: &str = if cfg!(windows) {
     "game_desktop.bin"
 };
 const WEB_BINARY_NAME: &str = "game.wasm.o";
-const SOKOL_LIB_DIR: &str = "source/libs/sokol";
+const SOKOL_LIB_DIR: &str = "bonsai/libs/sokol";
 const UTILS_DIR: &str = "utils";
 // for checking whether sokol is compiled already
 const SOKOL_APP_WASM: &str = "app/sokol_app_wasm_gl_release.a";
@@ -41,7 +45,7 @@ const EMSCRIPTEN_FLAGS: &str = "-sWASM_BIGINT \
 -sINITIAL_MEMORY=67108864 \
 -sMAX_WEBGL_VERSION=2 \
 -sASSERTIONS \
---shell-file source/core/platform/web/index.html \
+--shell-file bonsai/core/platform/web/index.html \
 --preload-file assets/images/atlas.png \
 --preload-file assets/audio \
 --preload-file assets/fonts \
@@ -64,17 +68,17 @@ fn prepare_resources(verbose: bool) -> Result<(), CustomError> {
 
 fn get_c_libraries() -> Vec<String> {
     vec![
-        "source/libs/sokol/app/sokol_app_wasm_gl_release.a".to_string(),
-        "source/libs/sokol/glue/sokol_glue_wasm_gl_release.a".to_string(),
-        "source/libs/sokol/gfx/sokol_gfx_wasm_gl_release.a".to_string(),
-        "source/libs/sokol/shape/sokol_shape_wasm_gl_release.a".to_string(),
-        "source/libs/sokol/log/sokol_log_wasm_gl_release.a".to_string(),
-        "source/libs/sokol/gl/sokol_gl_wasm_gl_release.a".to_string(),
-        "source/libs/sokol/audio/sokol_audio_wasm_gl_release.a".to_string(),
-        "source/libs/stb/lib/stb_image_wasm.o".to_string(),
-        "source/libs/stb/lib/stb_image_write_wasm.o".to_string(),
-        "source/libs/stb/lib/stb_rect_pack_wasm.o".to_string(),
-        "source/libs/stb/lib/stb_truetype_wasm.o".to_string(),
+        "bonsai/libs/sokol/app/sokol_app_wasm_gl_release.a".to_string(),
+        "bonsai/libs/sokol/glue/sokol_glue_wasm_gl_release.a".to_string(),
+        "bonsai/libs/sokol/gfx/sokol_gfx_wasm_gl_release.a".to_string(),
+        "bonsai/libs/sokol/shape/sokol_shape_wasm_gl_release.a".to_string(),
+        "bonsai/libs/sokol/log/sokol_log_wasm_gl_release.a".to_string(),
+        "bonsai/libs/sokol/gl/sokol_gl_wasm_gl_release.a".to_string(),
+        "bonsai/libs/sokol/audio/sokol_audio_wasm_gl_release.a".to_string(),
+        "bonsai/libs/stb/lib/stb_image_wasm.o".to_string(),
+        "bonsai/libs/stb/lib/stb_image_write_wasm.o".to_string(),
+        "bonsai/libs/stb/lib/stb_rect_pack_wasm.o".to_string(),
+        "bonsai/libs/stb/lib/stb_truetype_wasm.o".to_string(),
     ]
     .iter()
     .map(|s| s.to_string())
@@ -82,9 +86,6 @@ fn get_c_libraries() -> Vec<String> {
 }
 
 fn compile_shaders(verbose: bool) -> Result<(), CustomError> {
-    if verbose {
-        println!("{} Compiling shaders...", "[INFO]".green());
-    }
     let shdc_path = get_or_install_shdc();
 
     let shader_format = if cfg!(target_os = "windows") {
@@ -93,22 +94,84 @@ fn compile_shaders(verbose: bool) -> Result<(), CustomError> {
         "metal_macos:glsl300es:hlsl4:glsl430"
     };
 
-    run_with_prefix(
-        &shdc_path.to_string_lossy(),
-        &[
-            "-i",
-            SHADERS_SRC,
-            "-o",
-            SHADERS_OUT,
-            "-l",
-            shader_format,
-            "-f",
-            "sokol_odin",
-        ],
-        "[SHDC]",
-        colored::Color::Cyan,
-        verbose,
-    )?;
+    if !should_skip(Path::new(SHADERS_BONSAI_SRC), Path::new(SHADERS_BONSAI_OUT))? {
+        if verbose {
+            println!("{} Compiling core shaders...", "[INFO]".green());
+        }
+        run_with_prefix(
+            &shdc_path.to_string_lossy(),
+            &[
+                "-i",
+                SHADERS_BONSAI_SRC,
+                "-o",
+                SHADERS_BONSAI_OUT,
+                "-l",
+                shader_format,
+                "-f",
+                "sokol_odin",
+            ],
+            "[SHDC]",
+            colored::Color::Cyan,
+            verbose,
+        )?;
+    } else if verbose {
+        println!(
+            "{} Core shader compilation skipped (already compiled).",
+            "[INFO]".green()
+        );
+    }
+
+    let walker = WalkDir::new(SHADERS_GAME_SRC).into_iter();
+
+    for entry in walker.filter_map(|e| e.ok()) {
+        let path = entry.path();
+        let output_path = path.with_extension("odin");
+
+        if !path.is_file() {
+            continue;
+        }
+        match path.extension().and_then(|s| s.to_str()) {
+            Some("glsl") | Some("vert") | Some("frag") => {}
+            _ => continue,
+        }
+        if should_skip(path, &output_path)? {
+            continue;
+        }
+
+        let path_str = path.to_str().ok_or_else(|| {
+            CustomError::ValidationError(format!(
+                "Path contains invalid UTF-8 characters: {:?}",
+                path
+            ))
+        })?;
+        let output_path_str = output_path.to_str().ok_or_else(|| {
+            CustomError::ValidationError(format!(
+                "Output path contains invalid UTF-8 characters: {:?}",
+                output_path
+            ))
+        })?;
+
+        if verbose {
+            println!("{} Compiling game shader: {}", "[INFO]".green(), path_str);
+        }
+
+        run_with_prefix(
+            &shdc_path.to_string_lossy(),
+            &[
+                "-i",
+                path_str,
+                "-o",
+                output_path_str,
+                "-l",
+                shader_format,
+                "-f",
+                "sokol_odin",
+            ],
+            "[CUSTOM SHDC]",
+            colored::Color::BrightBlue,
+            verbose,
+        )?;
+    }
 
     Ok(())
 }
@@ -156,6 +219,12 @@ fn compile_project(
 
     let out_flag = format!("-out:{}", out_path.to_string_lossy());
     args.push(&out_flag);
+
+    let bonsai_collection_flag = format!("-collection:bonsai={}", BONSAI_DIR);
+    args.push(&bonsai_collection_flag);
+
+    let game_collection_flag = format!("-collection:game={}", GAME_DIR);
+    args.push(&game_collection_flag);
 
     run_with_prefix(
         "odin",
@@ -265,6 +334,7 @@ pub fn build_web(config: &str, clean: bool, verbose: bool) -> Result<(), CustomE
     Ok(())
 }
 
+//TODO: clean user shaders
 pub fn clean_build(verbose: bool) -> Result<(), CustomError> {
     let build_dir = Path::new(BUILD_SRC);
     if build_dir.exists() {
@@ -274,7 +344,7 @@ pub fn clean_build(verbose: bool) -> Result<(), CustomError> {
         }
     }
 
-    let shader_output = Path::new(SHADERS_OUT);
+    let shader_output = Path::new(SHADERS_BONSAI_OUT);
     if shader_output.exists() {
         fs::remove_file(shader_output)?;
         if verbose {
@@ -662,4 +732,18 @@ fn dir_contains(dir_path: &str, ext: &str) -> bool {
     }
 
     false
+}
+
+fn should_skip(src: &Path, out: &Path) -> Result<bool, CustomError> {
+    if !out.exists() {
+        return Ok(false);
+    }
+
+    let src_meta = fs::metadata(src)?;
+    let out_meta = fs::metadata(out)?;
+
+    let src_time = src_meta.modified()?;
+    let out_time = out_meta.modified()?;
+
+    Ok(src_time <= out_time)
 }

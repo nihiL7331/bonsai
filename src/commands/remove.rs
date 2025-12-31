@@ -6,7 +6,7 @@ use std::io;
 use std::io::Write;
 use std::path::Path;
 
-const SYSTEMS_DIR: &str = "source/systems";
+const SYSTEMS_DIR: &str = "bonsai/systems";
 
 #[derive(Args)]
 pub struct RemoveArgs {
