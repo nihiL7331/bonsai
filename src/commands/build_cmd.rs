@@ -1,7 +1,7 @@
+use crate::Ui;
 use crate::build::{build_desktop, build_web, clean_build};
 use crate::error::CustomError;
 use clap::Args;
-use colored::Colorize;
 use std::path::Path;
 
 #[derive(Args)]
@@ -16,11 +16,9 @@ pub struct BuildArgs {
     pub config: String,
     #[arg(long)]
     pub clean: bool,
-    #[arg(long)]
-    pub verbose: bool,
 }
 
-pub fn build(args: &BuildArgs) -> Result<(), CustomError> {
+pub fn build(args: &BuildArgs, ui: Ui) -> Result<(), CustomError> {
     let project_dir = Path::new(&args.dir);
     if !project_dir.exists() {
         return Err(CustomError::ValidationError(format!(
@@ -44,35 +42,21 @@ pub fn build(args: &BuildArgs) -> Result<(), CustomError> {
         let _ = std::env::set_current_dir(&current_dir);
     });
 
-    if args.verbose {
-        println!(
-            "{} Building project in: {}",
-            "[INFO]".green(),
-            project_dir.display()
-        );
-    }
+    ui.log(&format!("Building project in: '{}'", project_dir.display()));
 
     if args.clean {
-        clean_build(args.verbose)?;
+        clean_build(&ui)?;
     }
 
     if args.web {
-        if args.verbose {
-            println!("{} Building for web ({})", "[INFO]".green(), args.config);
-        }
-        build_web(&args.config, args.clean, args.verbose)?;
+        ui.log(&format!("Building for web ({})", args.config));
+        build_web(&args.config, args.clean, &ui)?;
     } else {
-        if args.verbose {
-            println!(
-                "{} Building for desktop ({})",
-                "[INFO]".green(),
-                args.config
-            );
-        }
-        build_desktop(&args.config, args.clean, args.verbose)?;
+        ui.log(&format!("Building for desktop ({})", args.config));
+        build_desktop(&args.config, args.clean, &ui)?;
     }
 
-    println!("{} Build completed successfully.", "[INFO]".green());
+    ui.success("Build completed successfully.");
 
     Ok(())
 }

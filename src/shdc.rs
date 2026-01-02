@@ -1,5 +1,5 @@
+use crate::Ui;
 use crate::error::CustomError;
-use colored::Colorize;
 use reqwest::blocking::Client;
 use std::env;
 use std::fs;
@@ -32,7 +32,7 @@ pub fn get_shdc_url() -> Result<String, CustomError> {
     }
 }
 
-fn install_shdc() -> Result<PathBuf, CustomError> {
+fn install_shdc(ui: &Ui) -> Result<PathBuf, CustomError> {
     let home_dir = dirs::home_dir()
         .ok_or_else(|| CustomError::ValidationError("Could not find home directory".into()))?;
 
@@ -43,12 +43,11 @@ fn install_shdc() -> Result<PathBuf, CustomError> {
     let dest_path = install_dir.join(get_executable_name());
     let url = get_shdc_url()?;
 
-    println!(
-        "{} Downloading sokol-shdc for {}...",
-        "[INFO]".green(),
+    ui.message(&format!(
+        "Downloading sokol-shdc for {}...",
         env::consts::OS
-    );
-    println!("  Source: {}", url);
+    ));
+    ui.message(&format!("  Source: {}", url));
 
     let client = Client::new();
 
@@ -78,15 +77,11 @@ fn install_shdc() -> Result<PathBuf, CustomError> {
         fs::set_permissions(&dest_path, perms)?;
     }
 
-    println!(
-        "{} Installed sokol-shdc to {:?}",
-        "[INFO]".green(),
-        dest_path
-    );
+    ui.log(&format!("Installed sokol-shdc to {:?}", dest_path));
     Ok(dest_path)
 }
 
-pub fn get_or_install_shdc() -> PathBuf {
+pub fn get_or_install_shdc(ui: &Ui) -> PathBuf {
     let home = dirs::home_dir().expect("Home directory required.");
     let path = home.join(BONSAI_BIN_DIR).join(get_executable_name());
 
@@ -94,18 +89,10 @@ pub fn get_or_install_shdc() -> PathBuf {
         return path;
     }
 
-    match install_shdc() {
+    match install_shdc(ui) {
         Ok(p) => p,
-        Err(e) => {
-            eprintln!(
-                "{} Failed to install sokol-shdc: {}",
-                "[ERROR]".red().bold(),
-                e
-            );
-            eprintln!(
-                "{} Please check your internet connection.",
-                "[ERROR]".red().bold()
-            );
+        Err(_) => {
+            ui.error("Failed to install sokol-shdc. Please check your internet connection.");
             std::process::exit(1);
         }
     }

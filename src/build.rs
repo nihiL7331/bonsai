@@ -1,3 +1,4 @@
+use crate::Ui;
 use crate::assets::generate_assets;
 use crate::error::CustomError;
 use crate::manifest::{Manifest, update_manifest};
@@ -55,14 +56,14 @@ pub struct BuildResult {
     pub executable_path: PathBuf,
 }
 
-fn prepare_resources(verbose: bool) -> Result<(), CustomError> {
-    println!("{} Running pre-build tasks...", "[INFO]".green());
+fn prepare_resources(ui: &Ui) -> Result<(), CustomError> {
+    ui.status("Running pre-build tasks...");
     check_dependencies()?;
-    run_utils(verbose)?;
-    update_manifest(Path::new("."))?;
-    pack_atlas(Path::new(ASSETS_DIR), Path::new(IMAGES_DIR), verbose)?;
+    run_utils(ui)?;
+    update_manifest(Path::new("."), ui)?;
+    pack_atlas(Path::new(ASSETS_DIR), Path::new(IMAGES_DIR), ui)?;
     generate_assets()?;
-    compile_shaders(verbose)?;
+    compile_shaders(ui)?;
     Ok(())
 }
 
@@ -85,8 +86,8 @@ fn get_c_libraries() -> Vec<String> {
     .collect()
 }
 
-fn compile_shaders(verbose: bool) -> Result<(), CustomError> {
-    let shdc_path = get_or_install_shdc();
+fn compile_shaders(ui: &Ui) -> Result<(), CustomError> {
+    let shdc_path = get_or_install_shdc(ui);
 
     let shader_format = if cfg!(target_os = "windows") {
         "glsl300es:hlsl4:glsl430"
@@ -95,9 +96,7 @@ fn compile_shaders(verbose: bool) -> Result<(), CustomError> {
     };
 
     if !should_skip(Path::new(SHADERS_BONSAI_SRC), Path::new(SHADERS_BONSAI_OUT))? {
-        if verbose {
-            println!("{} Compiling core shaders...", "[INFO]".green());
-        }
+        ui.status("Compiling core shaders...");
         run_with_prefix(
             &shdc_path.to_string_lossy(),
             &[
@@ -112,13 +111,10 @@ fn compile_shaders(verbose: bool) -> Result<(), CustomError> {
             ],
             "[SHDC]",
             colored::Color::Cyan,
-            verbose,
+            ui,
         )?;
-    } else if verbose {
-        println!(
-            "{} Core shader compilation skipped (already compiled).",
-            "[INFO]".green()
-        );
+    } else {
+        ui.log("Core shader compilation skipped (already compiled).");
     }
 
     let walker = WalkDir::new(SHADERS_GAME_SRC).into_iter();
@@ -151,9 +147,7 @@ fn compile_shaders(verbose: bool) -> Result<(), CustomError> {
             ))
         })?;
 
-        if verbose {
-            println!("{} Compiling game shader: {}", "[INFO]".green(), path_str);
-        }
+        ui.status(&format!("Compiling game shader: {}", path_str));
 
         run_with_prefix(
             &shdc_path.to_string_lossy(),
@@ -169,7 +163,7 @@ fn compile_shaders(verbose: bool) -> Result<(), CustomError> {
             ],
             "[CUSTOM SHDC]",
             colored::Color::BrightBlue,
-            verbose,
+            ui,
         )?;
     }
 
@@ -180,15 +174,14 @@ fn compile_project(
     is_web_target: bool,
     config: &str,
     clean: bool,
-    verbose: bool,
+    ui: &Ui,
 ) -> Result<PathBuf, CustomError> {
-    compile_sokol(is_web_target, clean, verbose)?;
+    compile_sokol(is_web_target, clean, ui)?;
 
-    println!(
-        "{} Compiling project for {}...",
-        "[INFO]".green(),
+    ui.status(&format!(
+        "Compiling project for {}...",
         if is_web_target { "web" } else { "desktop" }
-    );
+    ));
 
     let (out_dir_str, binary_name) = if is_web_target {
         (BUILD_WEB_DIR, WEB_BINARY_NAME)
@@ -231,20 +224,18 @@ fn compile_project(
         &args.iter().map(|s| s.as_ref()).collect::<Vec<&str>>(),
         "[ODIN]",
         colored::Color::Blue,
-        verbose,
+        ui,
     )?;
 
     Ok(out_path)
 }
 
-pub fn build_desktop(config: &str, clean: bool, verbose: bool) -> Result<BuildResult, CustomError> {
-    prepare_resources(verbose)?;
+pub fn build_desktop(config: &str, clean: bool, ui: &Ui) -> Result<BuildResult, CustomError> {
+    prepare_resources(ui)?;
 
-    let binary_path = compile_project(false, config, clean, verbose)?;
+    let binary_path = compile_project(false, config, clean, ui)?;
 
-    if verbose {
-        println!("{} Copying assets...", "[INFO]".green());
-    }
+    ui.status("Copying assets...");
     let out_dir = binary_path.parent().unwrap();
     let assets_src = Path::new(ASSETS_DIR);
     let assets_dest = out_dir.join(ASSETS_DIR);
@@ -258,14 +249,12 @@ pub fn build_desktop(config: &str, clean: bool, verbose: bool) -> Result<BuildRe
     })
 }
 
-pub fn build_web(config: &str, clean: bool, verbose: bool) -> Result<(), CustomError> {
-    prepare_resources(verbose)?;
+pub fn build_web(config: &str, clean: bool, ui: &Ui) -> Result<(), CustomError> {
+    prepare_resources(ui)?;
 
-    let object_file = compile_project(true, config, clean, verbose)?;
+    let object_file = compile_project(true, config, clean, ui)?;
 
-    if verbose {
-        println!("{} Copying runtime files...", "[INFO]".green());
-    }
+    ui.status("Copying runtime files...");
     let out_dir = object_file.parent().unwrap();
 
     let odin_root_out = Command::new("odin")
@@ -289,9 +278,7 @@ pub fn build_web(config: &str, clean: bool, verbose: bool) -> Result<(), CustomE
         copy_dir_recursive(assets_src, &assets_dest).map_err(CustomError::IoError)?;
     }
 
-    if verbose {
-        println!("{} Linking with Emscripten...", "[INFO]".green());
-    }
+    ui.status("Linking with Emscripten...");
     let emsdk_path = get_emsdk_path()?;
 
     let mut libraries = get_c_libraries();
@@ -304,10 +291,10 @@ pub fn build_web(config: &str, clean: bool, verbose: bool) -> Result<(), CustomE
         .map_err(|e| CustomError::ValidationError(format!("Invalid manifest: {}", e)))?;
 
     if !manifest.build.web_libs.is_empty() {
-        println!(
+        ui.message(&format!(
             "  + Adding {} external libraries from manifest.",
             manifest.build.web_libs.len()
-        );
+        ));
         for lib in manifest.build.web_libs {
             let lib_path = Path::new(&lib);
             if !lib_path.exists() {
@@ -330,26 +317,22 @@ pub fn build_web(config: &str, clean: bool, verbose: bool) -> Result<(), CustomE
     let binary_path = Path::new(BUILD_WEB_DIR).join(WEB_BINARY_NAME);
     let _ = fs::remove_file(binary_path);
 
-    println!("{} Web build created in build/web", "[INFO]".green());
+    ui.success("Web build created in build/web.");
     Ok(())
 }
 
 //TODO: clean user shaders
-pub fn clean_build(verbose: bool) -> Result<(), CustomError> {
+pub fn clean_build(ui: &Ui) -> Result<(), CustomError> {
     let build_dir = Path::new(BUILD_SRC);
     if build_dir.exists() {
         fs::remove_dir_all(build_dir)?;
-        if verbose {
-            println!("{} Cleaned build directory.", "[INFO]".green());
-        }
+        ui.log("Cleaned build directory.");
     }
 
     let shader_output = Path::new(SHADERS_BONSAI_OUT);
     if shader_output.exists() {
         fs::remove_file(shader_output)?;
-        if verbose {
-            println!("{} Cleaned shader output.", "[INFO]".green());
-        }
+        ui.log("Cleaned shader output.");
     }
 
     let _ = fs::remove_dir_all("utils/__pycache__"); // python scripts
@@ -387,10 +370,8 @@ fn copy_dir_recursive(src: &Path, dest: &Path) -> std::io::Result<()> {
     Ok(())
 }
 
-fn compile_sokol(is_web_target: bool, clean: bool, verbose: bool) -> Result<(), CustomError> {
-    if verbose {
-        println!("{} Compiling sokol...", "[INFO]".green());
-    }
+fn compile_sokol(is_web_target: bool, clean: bool, ui: &Ui) -> Result<(), CustomError> {
+    ui.status("Compiling sokol...");
 
     let sokol_dir = Path::new(SOKOL_LIB_DIR);
 
@@ -418,12 +399,7 @@ fn compile_sokol(is_web_target: bool, clean: bool, verbose: bool) -> Result<(), 
     let output_path = sokol_dir.join(expected_output);
 
     if !clean && output_path.exists() {
-        if verbose {
-            println!(
-                "{} Sokol compilation skipped (already compiled).",
-                "[INFO]".green()
-            );
-        }
+        ui.status("Sokol compilation skipped (already compiled).");
         return Ok(());
     }
 
@@ -529,28 +505,26 @@ fn run_in_emsdk(cmd: &str, emsdk_path: &Path) -> Result<(), CustomError> {
     Ok(())
 }
 
-fn run_utils(verbose: bool) -> Result<(), CustomError> {
+fn run_utils(ui: &Ui) -> Result<(), CustomError> {
     let utils_path = Path::new(UTILS_DIR);
     if !utils_path.exists() {
         return Ok(());
     }
 
-    if verbose {
-        println!("{} Scanning for utility scripts...", "[INFO]".green());
-    }
+    ui.status("Scanning for utility scripts...");
 
-    visit_utility_dir(utils_path, verbose)?;
+    visit_utility_dir(utils_path, ui)?;
 
     Ok(())
 }
 
-fn visit_utility_dir(dir: &Path, verbose: bool) -> Result<(), CustomError> {
+fn visit_utility_dir(dir: &Path, ui: &Ui) -> Result<(), CustomError> {
     for entry in fs::read_dir(dir).map_err(CustomError::IoError)? {
         let entry = entry.map_err(CustomError::IoError)?;
         let path = entry.path();
 
         if path.is_dir() {
-            visit_utility_dir(&path, verbose)?;
+            visit_utility_dir(&path, ui)?;
             continue;
         }
 
@@ -565,7 +539,7 @@ fn visit_utility_dir(dir: &Path, verbose: bool) -> Result<(), CustomError> {
                         &[path_str],
                         "[PYTHON]",
                         colored::Color::Yellow,
-                        verbose,
+                        ui,
                     )
                     .or_else(|_| {
                         run_with_prefix(
@@ -573,18 +547,16 @@ fn visit_utility_dir(dir: &Path, verbose: bool) -> Result<(), CustomError> {
                             &[path_str],
                             "[PYTHON]",
                             colored::Color::Yellow,
-                            verbose,
+                            ui,
                         )
                     })?;
                 }
                 "rs" => {
-                    if verbose {
-                        println!(
-                            "{} Running Rust script: {:?}",
-                            "[RUST]".bright_red(),
-                            path_str,
-                        )
-                    };
+                    ui.message(&format!(
+                        "{} Running Rust script: {:?}",
+                        "[RUST]".bright_red(),
+                        path_str
+                    ));
                     run_rust_script(&path)?;
                 }
                 "odin" => {
@@ -593,7 +565,7 @@ fn visit_utility_dir(dir: &Path, verbose: bool) -> Result<(), CustomError> {
                         &["run", path_str, "-file"],
                         "[ODIN]",
                         colored::Color::Blue,
-                        verbose,
+                        ui,
                     )?;
                 }
                 _ => {}
@@ -664,14 +636,13 @@ fn run_with_prefix(
     args: &[&str],
     prefix: &str,
     color: colored::Color,
-    verbose: bool,
+    ui: &Ui,
 ) -> Result<(), CustomError> {
-    if verbose {
-        println!(
-            "{}",
-            format!("{} Running script with args: {}...", prefix, args.join(" "))
-        )
-    }
+    ui.message(&format!(
+        "{} Running script with arguments: {}...",
+        prefix,
+        args.join(" ")
+    ));
 
     let mut child = Command::new(cmd)
         .args(args)
@@ -686,11 +657,14 @@ fn run_with_prefix(
     let prefix_out = prefix.to_string();
     let prefix_err = prefix.to_string();
 
+    let ui_clone_out = ui.clone();
+    let ui_clone_err = ui.clone();
+
     let stdout_thread = std::thread::spawn(move || {
         let stdout_reader = BufReader::new(stdout);
         for line in stdout_reader.lines() {
             if let Ok(l) = line {
-                println!("{}", format!("{} {}", prefix_out, l).color(color));
+                ui_clone_out.message(&format!("{}", format!("{} {}", prefix_out, l).color(color)));
             }
         }
     });
@@ -699,7 +673,7 @@ fn run_with_prefix(
         let stderr_reader = BufReader::new(stderr);
         for line in stderr_reader.lines() {
             if let Ok(l) = line {
-                eprintln!("{}", format!("{} {}", prefix_err, l).color(color));
+                ui_clone_err.error(&format!("{}", format!("{} {}", prefix_err, l).color(color)));
             }
         }
     });

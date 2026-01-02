@@ -1,3 +1,4 @@
+use crate::ui::Ui;
 use clap::{Parser, Subcommand};
 use colored::*;
 
@@ -9,6 +10,7 @@ mod git;
 mod manifest;
 mod packer;
 mod shdc;
+mod ui;
 
 use commands::build_cmd::{self, BuildArgs};
 use commands::init::{self, InitArgs};
@@ -24,6 +26,8 @@ use commands::run::{self, RunArgs};
     author,
 )]
 struct Cli {
+    #[arg(short, long)]
+    verbose: bool,
     #[command(subcommand)]
     command: Commands,
 }
@@ -47,11 +51,13 @@ fn handle_result(res: Result<(), crate::error::CustomError>, context: &str) {
 fn main() {
     let cli = Cli::parse();
 
+    let ui = Ui::new(cli.verbose);
+
     match &cli.command {
-        Commands::Init(args) => handle_result(init::init(args), "init"),
-        Commands::Run(args) => handle_result(run::run(args), "run"),
-        Commands::Build(args) => handle_result(build_cmd::build(args), "build"),
-        Commands::Install(args) => handle_result(install::install(args), "install"),
-        Commands::Remove(args) => handle_result(remove::remove(args), "remove"),
+        Commands::Init(args) => handle_result(init::init(args, ui.clone()), "init"),
+        Commands::Run(args) => handle_result(run::run(args, ui.clone()), "run"),
+        Commands::Build(args) => handle_result(build_cmd::build(args, ui.clone()), "build"),
+        Commands::Install(args) => handle_result(install::install(args, ui.clone()), "install"),
+        Commands::Remove(args) => handle_result(remove::remove(args, ui.clone()), "remove"),
     }
 }

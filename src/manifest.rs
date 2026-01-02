@@ -1,3 +1,4 @@
+use crate::Ui;
 use crate::error::CustomError;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
@@ -41,7 +42,7 @@ pub struct BuildOptions {
     pub web_libs: Vec<String>,
 }
 
-pub fn update_manifest(project_root: &Path) -> Result<(), CustomError> {
+pub fn update_manifest(project_root: &Path, ui: &Ui) -> Result<(), CustomError> {
     let manifest_path = project_root.join(MANIFEST_FILE);
     let systems_path = project_root.join("bonsai/systems");
 
@@ -79,12 +80,18 @@ pub fn update_manifest(project_root: &Path) -> Result<(), CustomError> {
 
             let sys_toml_path = path.join(SYSTEM_MANIFEST);
             if !sys_toml_path.exists() {
-                println!("  + Auto-generating manifest for system: '{}'", system_name);
+                ui.message(&format!(
+                    "  + Auto-generating manifest for system: '{}'",
+                    system_name
+                ));
                 create_default_system_toml(&sys_toml_path, system_name)?;
             }
 
             if !deps.contains_key(system_name) {
-                println!("  + Discovered new local system: '{}'", system_name);
+                ui.message(&format!(
+                    "  + Discovered new local system: '{}'",
+                    system_name
+                ));
 
                 let mut t = InlineTable::new();
                 t.insert(
@@ -108,21 +115,24 @@ pub fn update_manifest(project_root: &Path) -> Result<(), CustomError> {
                     let full_path = project_root_abs.join(path_str);
 
                     if !full_path.exists() {
-                        println!("  - Pruning missing system: '{}'", name);
+                        ui.message(&format!("  - Pruning missing system: '{}'", name));
                         to_remove.push(name.to_string());
                         continue;
                     }
 
                     match is_path_safe(&systems_root_abs, &full_path) {
                         Ok(false) => {
-                            println!(
+                            ui.message(&format!(
                                 "  - Removing unsafe system path (outside source): '{}'",
                                 name
-                            );
+                            ));
                             to_remove.push(name.to_string());
                         }
                         Err(e) => {
-                            println!("  ! Error verifying system path '{}': {}", name, e);
+                            ui.message(&format!(
+                                "  ! Error verifying system path '{}': {}",
+                                name, e
+                            ));
                         }
                         _ => {}
                     }

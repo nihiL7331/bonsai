@@ -1,6 +1,6 @@
+use crate::Ui;
 use crate::assets::generate_sprite_metadata;
 use crate::error::CustomError;
-use colored::Colorize;
 use std::collections::HashSet;
 use std::fs::{self};
 use std::path::{Path, PathBuf};
@@ -17,7 +17,6 @@ struct AtlasContext {
     tilesets_dir: PathBuf,
     atlas_path: PathBuf,
     atlas_dir: PathBuf,
-    verbose: bool,
 }
 
 struct AtlasOutput {
@@ -26,7 +25,7 @@ struct AtlasOutput {
 }
 
 impl AtlasContext {
-    fn new(assets_dir: &Path, atlas_dir: &Path, verbose: bool) -> Self {
+    fn new(assets_dir: &Path, atlas_dir: &Path) -> Self {
         let images_dir = assets_dir.join(IMAGES_DIR_NAME);
         let tilesets_dir = images_dir.join(TILESETS_DIR_NAME);
         let atlas_dir = PathBuf::from(atlas_dir);
@@ -37,26 +36,19 @@ impl AtlasContext {
             tilesets_dir,
             atlas_path,
             atlas_dir,
-            verbose,
-        }
-    }
-
-    fn info(&self, msg: impl AsRef<str>) {
-        if self.verbose {
-            println!("{} {}", "[INFO]".green(), msg.as_ref());
         }
     }
 }
 
-pub fn pack_atlas(assets_dir: &Path, atlas_dir: &Path, verbose: bool) -> Result<(), CustomError> {
-    let ctx = AtlasContext::new(assets_dir, atlas_dir, verbose);
+pub fn pack_atlas(assets_dir: &Path, atlas_dir: &Path, ui: &Ui) -> Result<(), CustomError> {
+    let ctx = AtlasContext::new(assets_dir, atlas_dir);
 
     if !should_repack(&ctx.images_dir, &ctx.atlas_path)? {
-        ctx.info("Atlas is up to date. Skipping packing.");
+        ui.log("Atlas is up to date. Skipping packing.");
         return Ok(());
     }
 
-    ctx.info("Packing texture atlas...");
+    ui.status("Packing texture atlas...");
 
     let config = TexturePackerConfig {
         max_width: 2048,
@@ -71,8 +63,8 @@ pub fn pack_atlas(assets_dir: &Path, atlas_dir: &Path, verbose: bool) -> Result<
     let mut packer = TexturePacker::new_skyline(config);
     let mut extruded_sprites: HashSet<String> = HashSet::new();
     let sorted_files = get_sorted_image_files(&ctx.images_dir)?;
-    process_images(&ctx, &sorted_files, &mut packer, &mut extruded_sprites)?;
-    let output = write_atlas(&ctx, &packer)?;
+    process_images(&ctx, &sorted_files, &mut packer, &mut extruded_sprites, ui)?;
+    let output = write_atlas(&ctx, &packer, ui)?;
     generate_sprite_metadata(&packer, output.width, output.height, &extruded_sprites)?;
 
     Ok(())
@@ -109,6 +101,7 @@ fn process_images(
     files: &[PathBuf],
     packer: &mut TexturePacker<image::RgbaImage, String>,
     extruded_sprites: &mut HashSet<String>,
+    ui: &Ui,
 ) -> Result<(), CustomError> {
     for path in files {
         let file_name = path.file_name().and_then(|s| s.to_str()).unwrap();
@@ -125,7 +118,7 @@ fn process_images(
         let is_tileset = path.starts_with(&ctx.tilesets_dir);
 
         if is_tileset {
-            ctx.info(format!("Slicing tileset found: {}", file_name));
+            ui.log(&format!("Slicing tileset found: {}", file_name));
 
             let (tile_w, tile_h) = parse_grid_size_from_name(&file_stem)
                 .unwrap_or((DEFAULT_TILE_SIZE, DEFAULT_TILE_SIZE));
@@ -215,6 +208,7 @@ fn parse_grid_size_from_name(name: &str) -> Option<(u32, u32)> {
 fn write_atlas(
     ctx: &AtlasContext,
     packer: &TexturePacker<image::RgbaImage, String>,
+    ui: &Ui,
 ) -> Result<AtlasOutput, CustomError> {
     let atlas_image = ImageExporter::export(packer, None)
         .map_err(|e| CustomError::BuildError(format!("Failed to export atlas: {}", e)))?;
@@ -225,7 +219,7 @@ fn write_atlas(
         .save(&ctx.atlas_path)
         .map_err(|_| CustomError::BuildError("Failed to save atlas".to_string()))?;
 
-    ctx.info(&format!(
+    ui.log(&format!(
         "Atlas generated at {:?} ({}x{})",
         ctx.atlas_path,
         atlas_image.width(),

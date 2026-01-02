@@ -9,6 +9,7 @@ license = "MIT"
 readme = "README.md"
 
 [dependencies]
+chrono = "0.4.42"
 clap = { version = "4.5.53", features = ["derive"] }
 colored = "3.0.0"
 ctrlc = "3.5.1"

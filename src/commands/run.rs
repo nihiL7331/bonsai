@@ -1,5 +1,6 @@
 use crate::build::{build_desktop, build_web, clean_build};
 use crate::error::CustomError;
+use crate::ui::Ui;
 use clap::Args;
 use colored::Colorize;
 use rouille::Server;
@@ -24,11 +25,9 @@ pub struct RunArgs {
     pub clean: bool,
     #[arg(long, short = 'p', default_value_t = 8080)]
     pub port: u16,
-    #[arg(long)]
-    pub verbose: bool,
 }
 
-pub fn run(args: &RunArgs) -> Result<(), CustomError> {
+pub fn run(args: &RunArgs, ui: Ui) -> Result<(), CustomError> {
     let project_dir = Path::new(&args.dir);
     if !project_dir.exists() {
         return Err(CustomError::ValidationError(format!(
@@ -52,33 +51,25 @@ pub fn run(args: &RunArgs) -> Result<(), CustomError> {
         let _ = std::env::set_current_dir(&dir);
     });
 
-    if args.verbose {
-        println!(
-            "{} Running project in: {}",
-            "[INFO]".green(),
-            project_dir.display()
-        );
-    }
+    ui.status(&format!("Running project in: {}...", project_dir.display()));
 
     if args.clean {
-        clean_build(args.verbose)?;
+        clean_build(&ui)?;
     }
 
     if args.web {
-        run_web(args)?;
+        run_web(args, &ui)?;
     } else {
-        run_desktop(args)?;
+        run_desktop(args, &ui)?;
     }
 
     Ok(())
 }
 
-fn run_desktop(args: &RunArgs) -> Result<(), CustomError> {
-    if args.verbose {
-        println!("{} Building for desktop...", "[INFO]".green());
-    }
+fn run_desktop(args: &RunArgs, ui: &Ui) -> Result<(), CustomError> {
+    ui.status("Building for desktop...");
 
-    let build_result = build_desktop(&args.config, false, args.verbose)?;
+    let build_result = build_desktop(&args.config, false, ui)?;
 
     if !build_result.executable_path.exists() {
         return Err(CustomError::BuildError(format!(
@@ -87,7 +78,8 @@ fn run_desktop(args: &RunArgs) -> Result<(), CustomError> {
         )));
     }
 
-    println!("{} Running desktop build...", "[INFO]".green());
+    ui.success("Running desktop build...");
+    println!("");
 
     let mut child = Command::new(&build_result.executable_path)
         .stdout(Stdio::inherit())
@@ -100,26 +92,18 @@ fn run_desktop(args: &RunArgs) -> Result<(), CustomError> {
         .map_err(|e| CustomError::ProcessError(format!("Failed to wait for process: {}", e)))?;
 
     if !status.success() {
-        println!(
-            "{} Game exited with code: {}",
-            "[ERROR]".red().bold(),
-            status
-        );
+        ui.error(&format!("Game exited with code: {}", status));
     }
 
     Ok(())
 }
 
-fn run_web(args: &RunArgs) -> Result<(), CustomError> {
-    if args.verbose {
-        println!("{} Building for web...", "[INFO]".green());
-    }
+fn run_web(args: &RunArgs, ui: &Ui) -> Result<(), CustomError> {
+    ui.status("Building for web...");
 
-    build_web(&args.config, false, args.verbose)?;
+    build_web(&args.config, false, ui)?;
 
-    if args.verbose {
-        println!("{} Starting web server...", "[INFO]".green());
-    }
+    ui.status("Starting web server...");
 
     let port = args.port;
     thread::spawn(move || {
@@ -127,7 +111,7 @@ fn run_web(args: &RunArgs) -> Result<(), CustomError> {
         let _ = open_browser(port);
     });
 
-    serve_web_directory(Path::new("build/web"), args.port)?;
+    serve_web_directory(Path::new("build/web"), args.port, ui)?;
 
     Ok(())
 }
@@ -149,7 +133,7 @@ fn open_browser(port: u16) -> Result<(), CustomError> {
     Ok(())
 }
 
-fn serve_web_directory(web_dir: &Path, port: u16) -> Result<(), CustomError> {
+fn serve_web_directory(web_dir: &Path, port: u16, ui: &Ui) -> Result<(), CustomError> {
     if !web_dir.exists() {
         return Err(CustomError::ValidationError(format!(
             "Web build does not exist: {}",
@@ -162,19 +146,22 @@ fn serve_web_directory(web_dir: &Path, port: u16) -> Result<(), CustomError> {
 
     let shutdown = Arc::new(AtomicBool::new(false));
     let shutdown_clone = shutdown.clone();
+    let ui_clone = ui.clone();
 
     ctrlc::set_handler(move || {
         shutdown_clone.store(true, Ordering::SeqCst);
-        println!("\n{} Shutting down server...", "[INFO]".green());
+        ui_clone.error("Received Ctrl+C. Shutting down server...");
     })
     .map_err(|e| CustomError::ProcessError(format!("Failed to set Ctrl+C handler: {}", e)))?;
 
-    println!(
+    ui.message(&format!(
         "{} Serving web build at http://localhost:{}.",
         "[INFO]".green(),
         port
-    );
-    println!("  (CTRL+C to stop the server)");
+    ));
+    ui.message("  (CTRL+C to stop the server)");
+
+    ui.status("Server running...");
 
     let server = Server::new(&addr, move |request| {
         let url = request.url();
@@ -203,6 +190,5 @@ fn serve_web_directory(web_dir: &Path, port: u16) -> Result<(), CustomError> {
         thread::sleep(std::time::Duration::from_millis(50));
     }
 
-    println!("{} Server stopped.", "[INFO]".green());
     Ok(())
 }

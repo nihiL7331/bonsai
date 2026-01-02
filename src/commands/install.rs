@@ -1,8 +1,8 @@
+use crate::Ui;
 use crate::error::CustomError;
 use crate::git::clone_with_progress_to_temp;
 use crate::manifest::update_manifest;
 use clap::Args;
-use colored::Colorize;
 use std::fs;
 use std::io;
 use std::path::Path;
@@ -19,11 +19,9 @@ pub struct InstallArgs {
     pub version: String,
     #[arg(long, short)]
     pub name: Option<String>,
-    #[arg(long)]
-    pub verbose: bool,
 }
 
-pub fn install(args: &InstallArgs) -> Result<(), CustomError> {
+pub fn install(args: &InstallArgs, ui: Ui) -> Result<(), CustomError> {
     let project_manifest_path = Path::new(MANIFEST_FILE);
     if !project_manifest_path.exists() {
         return Err(CustomError::ValidationError(
@@ -53,21 +51,13 @@ pub fn install(args: &InstallArgs) -> Result<(), CustomError> {
 
     let target_path = systems_dir.join(&folder_name);
     if target_path.exists() {
-        if args.verbose {
-            return Err(CustomError::ValidationError(format!(
-                "System '{}' is already installed at {:?}",
-                folder_name, target_path
-            )));
-        }
+        return Err(CustomError::ValidationError(format!(
+            "System '{}' is already installed at {:?}",
+            folder_name, target_path
+        )));
     }
 
-    if args.verbose {
-        println!(
-            "{} Installing system '{}'...",
-            "[INFO]".green(),
-            folder_name
-        );
-    }
+    ui.status(&format!("Installing system '{}'...", folder_name));
 
     // 1. clone to temp cache
     let temp_repo = clone_with_progress_to_temp(&full_url, &args.version)?;
@@ -86,6 +76,7 @@ pub fn install(args: &InstallArgs) -> Result<(), CustomError> {
     let doc = manifest_content.parse::<DocumentMut>()?;
     if let Some(deps) = doc.get("dependencies").and_then(|d| d.as_table()) {
         for (dep_name, dep_value) in deps.iter() {
+            let ui_clone = ui.clone();
             let dep_url = if let Some(table) = dep_value.as_table() {
                 table.get("git").and_then(|v| v.as_str())
             } else {
@@ -93,18 +84,13 @@ pub fn install(args: &InstallArgs) -> Result<(), CustomError> {
             };
 
             if let Some(url) = dep_url {
-                println!(
-                    "{} Resolving dependency '{}'...",
-                    "[INFO]".green(),
-                    dep_name
-                );
+                ui_clone.status(&format!("Resolving dependency '{}'...", dep_name));
                 let dep_args = InstallArgs {
                     url: url.to_string(),
                     name: Some(dep_name.to_string()),
                     version: "latest".to_string(),
-                    verbose: args.verbose,
                 };
-                install(&dep_args)?;
+                install(&dep_args, ui_clone)?;
             }
         }
     }
@@ -119,9 +105,7 @@ pub fn install(args: &InstallArgs) -> Result<(), CustomError> {
         )));
     }
 
-    if args.verbose {
-        println!("{} Copying system files...", "[INFO]".green());
-    }
+    ui.status("Copying system files...");
 
     copy_dir_all(&source_system_path, &target_path).map_err(|e| CustomError::IoError(e))?;
 
@@ -135,28 +119,19 @@ pub fn install(args: &InstallArgs) -> Result<(), CustomError> {
 
         let target_utils_path = project_utils_dir.join(&folder_name);
 
-        if args.verbose {
-            println!(
-                "{} Found utilities. Installing to 'utils/{}'...",
-                "[INFO]".green(),
-                folder_name
-            );
-        }
+        ui.status(&format!(
+            "Found utilities. Installing to 'utils/{}'",
+            folder_name
+        ));
 
         copy_dir_all(&source_utils_path, &target_utils_path)
             .map_err(|e| CustomError::IoError(e))?;
     }
 
-    if args.verbose {
-        println!("{} Updating manifest...", "[INFO]".green());
-    }
-    update_manifest(Path::new("."))?;
+    ui.status("Updating manifest...");
+    update_manifest(Path::new("."), &ui)?;
 
-    println!(
-        "{} Installed {} successfully.",
-        "[INFO]".green(),
-        folder_name
-    );
+    ui.success(&format!("Installed {} successfully.", folder_name));
     Ok(())
 }
 
