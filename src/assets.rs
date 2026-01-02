@@ -10,7 +10,7 @@ enum AssetSearchMode<'a> {
 }
 
 //sprite
-const SPRITE_OUTPUT_DIR: &str = "source/types/game/generated_sprite.odin";
+const SPRITE_OUTPUT_DIR: &str = "bonsai/types/game/generated_sprite.odin";
 //font
 const FONT_SRC_DIR: &str = "assets/fonts";
 const FONT_OUT_DIR: &str = "bonsai/types/game/generated_font.odin";
