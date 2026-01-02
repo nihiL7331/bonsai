@@ -530,42 +530,39 @@ fn run_in_emsdk(cmd: &str, emsdk_path: &Path) -> Result<(), CustomError> {
 }
 
 fn run_utils(verbose: bool) -> Result<(), CustomError> {
-    let utils_dir = Path::new(UTILS_DIR);
-    if !utils_dir.exists() {
+    let utils_path = Path::new(UTILS_DIR);
+    if !utils_path.exists() {
         return Ok(());
     }
 
-    if dir_contains("./utils", "odin") {
-        let utils_status = Command::new("odin")
-            .args(&["run", "./utils"])
-            .stdout(Stdio::inherit())
-            .stderr(Stdio::inherit())
-            .status()
-            .map_err(|_| CustomError::BuildError("Failed to run utils".into()))?;
-
-        if !utils_status.success() {
-            return Err(CustomError::BuildError("Utils script failed".into()));
-        }
-        if verbose {
-            println!("{} Running utility scripts...", "[INFO]".green());
-        }
-    } else if verbose {
-        println!("{} No odin utility files found.", "[INFO]".green());
+    if verbose {
+        println!("{} Scanning for utility scripts...", "[INFO]".green());
     }
-    for entry in fs::read_dir(utils_dir).map_err(CustomError::IoError)? {
+
+    visit_utility_dir(utils_path, verbose)?;
+
+    Ok(())
+}
+
+fn visit_utility_dir(dir: &Path, verbose: bool) -> Result<(), CustomError> {
+    for entry in fs::read_dir(dir).map_err(CustomError::IoError)? {
         let entry = entry.map_err(CustomError::IoError)?;
         let path = entry.path();
 
         if path.is_dir() {
+            visit_utility_dir(&path, verbose)?;
             continue;
         }
 
         if let Some(ext) = path.extension().and_then(|s| s.to_str()) {
+            let path_str = path
+                .to_str()
+                .ok_or(CustomError::ValidationError("Invalid UTF-8 path".into()))?;
             match ext {
                 "py" => {
                     run_with_prefix(
                         "python3",
-                        &[path.to_str().unwrap()],
+                        &[path_str],
                         "[PYTHON]",
                         colored::Color::Yellow,
                         verbose,
@@ -573,7 +570,7 @@ fn run_utils(verbose: bool) -> Result<(), CustomError> {
                     .or_else(|_| {
                         run_with_prefix(
                             "python",
-                            &[path.to_str().unwrap()],
+                            &[path_str],
                             "[PYTHON]",
                             colored::Color::Yellow,
                             verbose,
@@ -581,12 +578,23 @@ fn run_utils(verbose: bool) -> Result<(), CustomError> {
                     })?;
                 }
                 "rs" => {
-                    println!(
-                        "{} Running Rust script: {:?}",
-                        "[RUST]".bright_red(),
-                        path.file_name().unwrap()
-                    );
+                    if verbose {
+                        println!(
+                            "{} Running Rust script: {:?}",
+                            "[RUST]".bright_red(),
+                            path_str,
+                        )
+                    };
                     run_rust_script(&path)?;
+                }
+                "odin" => {
+                    run_with_prefix(
+                        "odin",
+                        &["run", path_str, "-file"],
+                        "[ODIN]",
+                        colored::Color::Blue,
+                        verbose,
+                    )?;
                 }
                 _ => {}
             }
@@ -708,30 +716,6 @@ fn run_with_prefix(
     }
 
     Ok(())
-}
-
-fn dir_contains(dir_path: &str, ext: &str) -> bool {
-    let path = Path::new(dir_path);
-
-    if !path.exists() || !path.is_dir() {
-        return false;
-    }
-
-    if let Ok(entries) = fs::read_dir(path) {
-        for entry in entries.flatten() {
-            let path = entry.path();
-
-            if path.is_file() {
-                if let Some(file_ext) = path.extension() {
-                    if file_ext == ext {
-                        return true;
-                    }
-                }
-            }
-        }
-    }
-
-    false
 }
 
 fn should_skip(src: &Path, out: &Path) -> Result<bool, CustomError> {
