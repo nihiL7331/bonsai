@@ -43,7 +43,7 @@ pub struct BuildOptions {
 
 pub fn update_manifest(project_root: &Path) -> Result<(), CustomError> {
     let manifest_path = project_root.join(MANIFEST_FILE);
-    let systems_path = project_root.join("source/systems");
+    let systems_path = project_root.join("bonsai/systems");
 
     if !systems_path.exists() {
         return Ok(());
@@ -89,7 +89,7 @@ pub fn update_manifest(project_root: &Path) -> Result<(), CustomError> {
                 let mut t = InlineTable::new();
                 t.insert(
                     "path",
-                    Value::from(format!("source/systems/{}", system_name)),
+                    Value::from(format!("bonsai/systems/{}", system_name)),
                 );
                 deps.insert(system_name, value(t));
             }
