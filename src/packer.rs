@@ -43,12 +43,14 @@ impl AtlasContext {
 pub fn pack_atlas(assets_dir: &Path, atlas_dir: &Path, ui: &Ui) -> Result<(), CustomError> {
     let ctx = AtlasContext::new(assets_dir, atlas_dir);
 
-    if !should_repack(&ctx.images_dir, &ctx.atlas_path)? {
+    if !should_repack(&ctx.images_dir, &ctx.atlas_path)? && ui.verbose {
         ui.log("Atlas is up to date. Skipping packing.");
         return Ok(());
     }
 
-    ui.status("Packing texture atlas...");
+    if ui.verbose {
+        ui.status("Packing texture atlas...");
+    }
 
     let config = TexturePackerConfig {
         max_width: 2048,
@@ -118,7 +120,9 @@ fn process_images(
         let is_tileset = path.starts_with(&ctx.tilesets_dir);
 
         if is_tileset {
-            ui.log(&format!("Slicing tileset found: {}", file_name));
+            if ui.verbose {
+                ui.log(&format!("Slicing tileset found: {}", file_name));
+            }
 
             let (tile_w, tile_h) = parse_grid_size_from_name(&file_stem)
                 .unwrap_or((DEFAULT_TILE_SIZE, DEFAULT_TILE_SIZE));
@@ -219,12 +223,14 @@ fn write_atlas(
         .save(&ctx.atlas_path)
         .map_err(|_| CustomError::BuildError("Failed to save atlas".to_string()))?;
 
-    ui.log(&format!(
-        "Atlas generated at {:?} ({}x{})",
-        ctx.atlas_path,
-        atlas_image.width(),
-        atlas_image.height()
-    ));
+    if ui.verbose {
+        ui.log(&format!(
+            "Atlas generated at {:?} ({}x{})",
+            ctx.atlas_path,
+            atlas_image.width(),
+            atlas_image.height()
+        ));
+    }
 
     Ok(AtlasOutput {
         width: atlas_image.width(),

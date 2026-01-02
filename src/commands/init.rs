@@ -71,7 +71,7 @@ pub fn init(args: &InitArgs, ui: Ui) -> Result<(), CustomError> {
         }
     });
 
-    ui.status(&format!("Initializing project '{}'", args.name));
+    ui.log(&format!("Initializing project '{}'.", args.name));
 
     clone_with_progress(REPO_URL, destination, &args.version, &ui)?;
 

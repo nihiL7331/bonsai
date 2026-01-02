@@ -42,17 +42,19 @@ pub fn build(args: &BuildArgs, ui: Ui) -> Result<(), CustomError> {
         let _ = std::env::set_current_dir(&current_dir);
     });
 
-    ui.log(&format!("Building project in: '{}'", project_dir.display()));
+    if ui.verbose {
+        ui.log(&format!("Building project in: '{}'", project_dir.display()));
+    }
 
     if args.clean {
         clean_build(&ui)?;
     }
 
     if args.web {
-        ui.log(&format!("Building for web ({})", args.config));
+        ui.log(&format!("Building for web ({}).", args.config));
         build_web(&args.config, args.clean, &ui)?;
     } else {
-        ui.log(&format!("Building for desktop ({})", args.config));
+        ui.log(&format!("Building for desktop ({}).", args.config));
         build_desktop(&args.config, args.clean, &ui)?;
     }
 

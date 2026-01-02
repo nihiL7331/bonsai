@@ -7,8 +7,8 @@ use std::io::Write;
 #[derive(Clone)]
 pub struct Ui {
     spinner: ProgressBar,
-    verbose: bool,
     multiprogress: MultiProgress,
+    pub verbose: bool,
 }
 
 impl Ui {

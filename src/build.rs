@@ -57,7 +57,9 @@ pub struct BuildResult {
 }
 
 fn prepare_resources(ui: &Ui) -> Result<(), CustomError> {
-    ui.status("Running pre-build tasks...");
+    if ui.verbose {
+        ui.status("Running pre-build tasks...");
+    }
     check_dependencies()?;
     run_utils(ui)?;
     update_manifest(Path::new("."), ui)?;
@@ -113,7 +115,7 @@ fn compile_shaders(ui: &Ui) -> Result<(), CustomError> {
             colored::Color::Cyan,
             ui,
         )?;
-    } else {
+    } else if ui.verbose {
         ui.log("Core shader compilation skipped (already compiled).");
     }
 
@@ -177,11 +179,6 @@ fn compile_project(
     ui: &Ui,
 ) -> Result<PathBuf, CustomError> {
     compile_sokol(is_web_target, clean, ui)?;
-
-    ui.status(&format!(
-        "Compiling project for {}...",
-        if is_web_target { "web" } else { "desktop" }
-    ));
 
     let (out_dir_str, binary_name) = if is_web_target {
         (BUILD_WEB_DIR, WEB_BINARY_NAME)
@@ -511,7 +508,9 @@ fn run_utils(ui: &Ui) -> Result<(), CustomError> {
         return Ok(());
     }
 
-    ui.status("Scanning for utility scripts...");
+    if ui.verbose {
+        ui.status("Scanning for utility scripts...");
+    }
 
     visit_utility_dir(utils_path, ui)?;
 
@@ -638,11 +637,13 @@ fn run_with_prefix(
     color: colored::Color,
     ui: &Ui,
 ) -> Result<(), CustomError> {
-    ui.message(&format!(
-        "{} Running script with arguments: {}...",
-        prefix,
-        args.join(" ")
-    ));
+    if ui.verbose {
+        ui.message(&format!(
+            "{} Running script with arguments: {}...",
+            prefix,
+            args.join(" ")
+        ));
+    }
 
     let mut child = Command::new(cmd)
         .args(args)
