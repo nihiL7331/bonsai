@@ -6,6 +6,7 @@ use colored::*;
 use std::path::Path;
 
 const SYSTEMS_DIR: &str = "bonsai/systems";
+const UTILS_DIR: &str = "utils";
 
 #[derive(Args)]
 pub struct RemoveArgs {
@@ -44,7 +45,13 @@ pub fn remove(args: &RemoveArgs, ui: Ui) -> Result<(), CustomError> {
     ui.status(&format!("Removing system '{}'...", args.name));
     std::fs::remove_dir_all(&target_path)?;
 
+    let utils_path = Path::new(UTILS_DIR);
+    let utils_target_path = utils_path.join(&args.name);
 
+    if utils_target_path.exists() {
+        ui.status(&format!("Removing system '{}' utility...", args.name));
+        std::fs::remove_dir_all(&utils_target_path)?;
+    }
 
     update_manifest(Path::new("."), &ui)?;
 
