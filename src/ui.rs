@@ -1,14 +1,14 @@
 use chrono::Local;
 use colored::*;
-use indicatif::{ProgressBar, ProgressStyle};
+use indicatif::{MultiProgress, ProgressBar, ProgressStyle};
 use std::io;
 use std::io::Write;
-use std::time::Duration;
 
 #[derive(Clone)]
 pub struct Ui {
     spinner: ProgressBar,
     verbose: bool,
+    multiprogress: MultiProgress,
 }
 
 impl Ui {
@@ -23,12 +23,12 @@ impl Ui {
                     .unwrap()
                     .tick_chars("⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏"),
             );
-            p.enable_steady_tick(Duration::from_millis(80));
             p
         };
 
         Self {
             spinner: pb,
+            multiprogress: MultiProgress::new(),
             verbose,
         }
     }
@@ -53,8 +53,9 @@ impl Ui {
         if self.verbose {
             println!("{} {} {}", time, "[LOG]".yellow().bold(), msg);
         } else {
-            self.spinner
-                .println(format!("{} {} {}", time, "[LOG]".yellow().bold(), msg));
+            let _ =
+                self.multiprogress
+                    .println(format!("{} {} {}", time, "[LOG]".yellow().bold(), msg));
         }
     }
 
@@ -83,13 +84,13 @@ impl Ui {
         if self.verbose {
             println!("{} {}", time, text);
         } else {
-            self.spinner.println(format!("{} {}", time, text));
+            let _ = self.multiprogress.println(format!("{} {}", time, text));
         }
     }
 
     pub fn confirm(&self, prompt_text: &str) -> bool {
         let time = self.timestamp();
-        self.spinner.suspend(|| {
+        self.multiprogress.suspend(|| {
             print!("{} {} [Y/N]: ", time, prompt_text);
             io::stdout().flush().unwrap_or(());
             let mut input = String::new();
@@ -97,5 +98,16 @@ impl Ui {
             let clean = input.trim().to_lowercase();
             clean == "y" || clean == "yes"
         })
+    }
+
+    pub fn create_bar(&self) -> ProgressBar {
+        let pb = self.multiprogress.add(ProgressBar::new(0));
+        pb.set_style(
+            ProgressStyle::default_bar()
+                .template("{spinner:.green} [{elapsed_precise}] [{bar:40.cyan/blue}] {pos}/{len}")
+                .unwrap()
+                .progress_chars("#>-"),
+        );
+        pb
     }
 }

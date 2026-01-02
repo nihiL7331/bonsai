@@ -60,7 +60,7 @@ pub fn install(args: &InstallArgs, ui: Ui) -> Result<(), CustomError> {
     ui.status(&format!("Installing system '{}'...", folder_name));
 
     // 1. clone to temp cache
-    let temp_repo = clone_with_progress_to_temp(&full_url, &args.version)?;
+    let temp_repo = clone_with_progress_to_temp(&full_url, &args.version, &ui)?;
     let repo_path = temp_repo.path();
 
     // 2. read manifest

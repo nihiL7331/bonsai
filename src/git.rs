@@ -1,7 +1,8 @@
+use crate::Ui;
 use crate::error::CustomError;
 use git2::build::RepoBuilder;
 use git2::{Cred, FetchOptions, Progress, RemoteCallbacks};
-use indicatif::{ProgressBar, ProgressStyle};
+use indicatif::ProgressStyle;
 use std::cell::RefCell;
 use std::path::Path;
 use tempfile::TempDir;
@@ -10,14 +11,9 @@ pub fn clone_with_progress(
     full_url: &str,
     destination: &Path,
     version: &str,
+    ui: &Ui,
 ) -> Result<(), CustomError> {
-    let pb = ProgressBar::new(0);
-    pb.set_style(
-        ProgressStyle::default_bar()
-            .template("{spinner:.green} [{elapsed_precise}] [{bar:40.cyan/blue}] {pos}/{len}")
-            .unwrap()
-            .progress_chars("#>-"),
-    );
+    let pb = ui.create_bar();
 
     let pb_ref = RefCell::new(pb);
     let mut callbacks = RemoteCallbacks::new();
@@ -67,16 +63,14 @@ pub fn clone_with_progress(
     Ok(())
 }
 
-pub fn clone_with_progress_to_temp(full_url: &str, version: &str) -> Result<TempDir, CustomError> {
+pub fn clone_with_progress_to_temp(
+    full_url: &str,
+    version: &str,
+    ui: &Ui,
+) -> Result<TempDir, CustomError> {
     let temp_dir = TempDir::new().map_err(|e| CustomError::IoError(e))?;
 
-    let pb = ProgressBar::new(0);
-    pb.set_style(
-        ProgressStyle::default_bar()
-            .template("{spinner:.green} [{elapsed_precise}] [{bar:40.cyan/blue}] {pos}/{len}")
-            .unwrap()
-            .progress_chars("#>-"),
-    );
+    let pb = ui.create_bar();
 
     let pb_ref = RefCell::new(pb);
     let mut callbacks = RemoteCallbacks::new();
