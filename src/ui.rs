@@ -61,7 +61,7 @@ impl Ui {
 
     pub fn success(&self, msg: &str) {
         let time = self.timestamp();
-        if self.verbose {
+        if self.spinner.is_finished() || self.verbose {
             println!("{} {} {}", time, "[SUCCESS]".green(), msg);
         } else {
             self.spinner
@@ -71,7 +71,7 @@ impl Ui {
 
     pub fn error(&self, msg: &str) {
         let time = self.timestamp();
-        if self.verbose {
+        if self.spinner.is_finished() || self.verbose {
             eprintln!("{} {} {}", time, "[ERROR]".red().bold(), msg);
         } else {
             self.spinner
