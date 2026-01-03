@@ -50,7 +50,8 @@ const EMSCRIPTEN_FLAGS: &str = "-sWASM_BIGINT \
 --preload-file assets/images/atlas.png \
 --preload-file assets/audio \
 --preload-file assets/fonts \
---preload-file assets/worlds";
+--preload-file assets/worlds \
+--preload-file bonsai/core/ui/PixelCode.ttf";
 
 pub struct BuildResult {
     pub executable_path: PathBuf,

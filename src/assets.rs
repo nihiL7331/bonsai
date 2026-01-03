@@ -14,6 +14,9 @@ const SPRITE_OUTPUT_DIR: &str = "bonsai/types/game/generated_sprite.odin";
 //font
 const FONT_SRC_DIR: &str = "assets/fonts";
 const FONT_OUT_DIR: &str = "bonsai/types/game/generated_font.odin";
+const ADDITIONAL_FONT_ENUM: &str = "PixelCode";
+//HACK: go backwards  to leave assets/fonts since filenames are relative to that path
+const ADDITIONAL_FONT_FILENAME: &str = "../../bonsai/core/ui/PixelCode.ttf";
 //audio
 const AUDIO_SRC_DIR: &str = "assets/audio";
 const AUDIO_OUT_DIR: &str = "bonsai/types/game/generated_audio.odin";
@@ -147,18 +150,24 @@ pub fn generate_assets() -> Result<(), CustomError> {
     generate_asset_metadata(
         FONT_SRC_DIR,
         FONT_OUT_DIR,
+        ADDITIONAL_FONT_ENUM,
+        ADDITIONAL_FONT_FILENAME,
         AssetSearchMode::ByExtension("ttf"),
         "Font",
     )?;
     generate_asset_metadata(
         AUDIO_SRC_DIR,
         AUDIO_OUT_DIR,
+        "",
+        "",
         AssetSearchMode::ByExtension("wav"),
         "Audio",
     )?;
     generate_asset_metadata(
         SCENE_SRC_DIR,
         SCENE_OUT_DIR,
+        "",
+        "",
         AssetSearchMode::Directories,
         "Scene",
     )?;
@@ -169,6 +178,8 @@ pub fn generate_assets() -> Result<(), CustomError> {
 fn generate_asset_metadata(
     asset_src: &str,
     asset_out: &str,
+    additional_asset_enum: &str,
+    additional_asset_filename: &str,
     mode: AssetSearchMode,
     enum_name: &str,
 ) -> Result<(), CustomError> {
@@ -206,6 +217,9 @@ fn generate_asset_metadata(
 
     odin_code.push_str(&format!("{}Name :: enum {{\n", enum_name));
     odin_code.push_str("\tnil,\n");
+    if additional_asset_enum != "" && additional_asset_filename != "" {
+        odin_code.push_str(&format!("\t{}, \n", additional_asset_enum));
+    }
     for (name, _) in &entries {
         odin_code.push_str(&format!("\t{}, \n", name));
     }
@@ -219,6 +233,12 @@ fn generate_asset_metadata(
             enum_name
         ));
         odin_code.push_str("\t.nil = \"\",\n");
+        if additional_asset_enum != "" && additional_asset_filename != "" {
+            odin_code.push_str(&format!(
+                "\t.{} = \"{}\", \n",
+                additional_asset_enum, additional_asset_filename
+            ));
+        }
         for (name, file) in &entries {
             odin_code.push_str(&format!("\t.{} = \"{}\",\n", name, file));
         }
