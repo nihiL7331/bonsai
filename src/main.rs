@@ -13,6 +13,7 @@ mod shdc;
 mod ui;
 
 use commands::build_cmd::{self, BuildArgs};
+use commands::docs::{self, DocsArgs};
 use commands::init::{self, InitArgs};
 use commands::install::{self, InstallArgs};
 use commands::remove::{self, RemoveArgs};
@@ -39,6 +40,7 @@ enum Commands {
     Build(BuildArgs),
     Install(InstallArgs),
     Remove(RemoveArgs),
+    Docs(DocsArgs),
 }
 
 fn handle_result(res: Result<(), crate::error::CustomError>, context: &str) {
@@ -59,5 +61,6 @@ fn main() {
         Commands::Build(args) => handle_result(build_cmd::build(args, ui.clone()), "build"),
         Commands::Install(args) => handle_result(install::install(args, ui.clone()), "install"),
         Commands::Remove(args) => handle_result(remove::remove(args, ui.clone()), "remove"),
+        Commands::Docs(args) => handle_result(docs::docs(args, ui.clone()), "docs"),
     }
 }

@@ -3,6 +3,7 @@ use colored::*;
 use indicatif::{MultiProgress, ProgressBar, ProgressStyle};
 use std::io;
 use std::io::Write;
+use std::time::Duration;
 
 #[derive(Clone)]
 pub struct Ui {
@@ -23,6 +24,7 @@ impl Ui {
                     .unwrap()
                     .tick_chars("⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏"),
             );
+            p.enable_steady_tick(Duration::from_millis(80));
             p
         };
 
@@ -64,6 +66,7 @@ impl Ui {
         if self.spinner.is_finished() || self.verbose {
             println!("{} {} {}", time, "[SUCCESS]".green(), msg);
         } else {
+            self.spinner.disable_steady_tick();
             self.spinner
                 .finish_with_message(format!("{} {} {}", time, "✔".green(), msg));
         }
@@ -74,6 +77,7 @@ impl Ui {
         if self.spinner.is_finished() || self.verbose {
             eprintln!("{} {} {}", time, "[ERROR]".red().bold(), msg);
         } else {
+            self.spinner.disable_steady_tick();
             self.spinner
                 .finish_with_message(format!("{} {} {}", time, "✘".red(), msg));
         }
