@@ -1,9 +1,6 @@
 use crate::Ui;
 use crate::error::CustomError;
-use reqwest::blocking::Client;
-use std::env;
-use std::fs;
-use std::path::PathBuf;
+use std::{env, fs, fs::File, io, path::PathBuf};
 
 const SHDC_BASE_URL: &str = "https://raw.githubusercontent.com/floooh/sokol-tools-bin/master/bin";
 const BONSAI_BIN_DIR: &str = ".bonsai/bin";
@@ -49,25 +46,15 @@ fn install_shdc(ui: &Ui) -> Result<PathBuf, CustomError> {
     ));
     ui.message(&format!("  Source: {}", url));
 
-    let client = Client::new();
+    let response = ureq::get(&url)
+        .call()
+        .map_err(|e| CustomError::BuildError(format!("Failed to download sokol-shdc: {}", e)))?;
 
-    let response = client
-        .get(&url)
-        .send()
-        .map_err(|e| CustomError::BuildError(format!("Network request failed: {}", e)))?;
+    let mut dest_file = File::create(&dest_path).map_err(|e| CustomError::IoError(e))?;
 
-    if !response.status().is_success() {
-        return Err(CustomError::BuildError(format!(
-            "Failed to download sokol-shdc (status: {})",
-            response.status()
-        )));
-    }
+    let mut reader = response.into_body().into_reader();
 
-    let bytes = response
-        .bytes()
-        .map_err(|e| CustomError::IoError(std::io::Error::new(std::io::ErrorKind::Other, e)))?;
-
-    fs::write(&dest_path, bytes)?;
+    io::copy(&mut reader, &mut dest_file).map_err(|e| CustomError::IoError(e))?;
 
     #[cfg(unix)]
     {
