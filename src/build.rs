@@ -13,7 +13,7 @@ use walkdir::WalkDir;
 
 // general
 const ASSETS_DIR: &str = "assets";
-const IMAGES_DIR: &str = "assets/images";
+const ATLAS_DIR: &str = "bonsai/core/render/atlas";
 const BONSAI_DIR: &str = "./bonsai";
 const GAME_DIR: &str = "./source/game";
 const SHADERS_BONSAI_SRC: &str = "bonsai/shaders/shader.glsl";
@@ -47,10 +47,9 @@ const EMSCRIPTEN_FLAGS: &str = "-sWASM_BIGINT \
 -sMAX_WEBGL_VERSION=2 \
 -sASSERTIONS \
 --shell-file bonsai/core/platform/web/index.html \
---preload-file assets/images/atlas.png \
+--preload-file bonsai/core/render/atlas \
 --preload-file assets/audio \
 --preload-file assets/fonts \
---preload-file assets/worlds \
 --preload-file bonsai/core/ui/PixelCode.ttf";
 
 pub struct BuildResult {
@@ -64,7 +63,7 @@ fn prepare_resources(ui: &Ui) -> Result<(), CustomError> {
     check_dependencies()?;
     run_utils(ui)?;
     update_manifest(Path::new("."), ui)?;
-    pack_atlas(Path::new(ASSETS_DIR), Path::new(IMAGES_DIR), ui)?;
+    pack_atlas(Path::new(ASSETS_DIR), Path::new(ATLAS_DIR), ui)?;
     generate_assets()?;
     compile_shaders(ui)?;
     Ok(())

@@ -48,6 +48,14 @@ pub fn pack_atlas(assets_dir: &Path, atlas_dir: &Path, ui: &Ui) -> Result<(), Cu
         return Ok(());
     }
 
+    let sorted_files = get_sorted_image_files(&ctx.images_dir)?;
+    if sorted_files.is_empty() {
+        if ui.verbose {
+            ui.log("No images to pack in assets directory. Skipping packing.");
+        }
+        return Ok(());
+    }
+
     if ui.verbose {
         ui.status("Packing texture atlas...");
     }
@@ -64,7 +72,6 @@ pub fn pack_atlas(assets_dir: &Path, atlas_dir: &Path, ui: &Ui) -> Result<(), Cu
     };
     let mut packer = TexturePacker::new_skyline(config);
     let mut extruded_sprites: HashSet<String> = HashSet::new();
-    let sorted_files = get_sorted_image_files(&ctx.images_dir)?;
     process_images(&ctx, &sorted_files, &mut packer, &mut extruded_sprites, ui)?;
     let output = write_atlas(&ctx, &packer, ui)?;
     generate_sprite_metadata(&packer, output.width, output.height, &extruded_sprites)?;
