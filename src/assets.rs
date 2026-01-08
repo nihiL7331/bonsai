@@ -16,7 +16,7 @@ const FONT_SRC_DIR: &str = "assets/fonts";
 const FONT_OUT_DIR: &str = "bonsai/generated/font.odin";
 const ADDITIONAL_FONT_ENUM: &str = "PixelCode";
 //HACK: go backwards  to leave assets/fonts since filenames are relative to that path
-const ADDITIONAL_FONT_FILENAME: &str = "../../bonsai/core/ui/PixelCode.ttf";
+const ADDITIONAL_FONT_FILENAME: &str = "bonsai/core/ui/PixelCode.ttf";
 //audio
 const AUDIO_SRC_DIR: &str = "assets/audio";
 const AUDIO_OUT_DIR: &str = "bonsai/generated/audio.odin";
@@ -246,10 +246,10 @@ fn generate_asset_metadata(
             };
 
             if is_match {
-                if let (Some(stem_os), Some(filename_os)) = (path.file_stem(), path.file_name()) {
-                    if let (Some(stem), Some(filename)) = (stem_os.to_str(), filename_os.to_str()) {
+                if let Some(stem_os) = path.file_stem() {
+                    if let (Some(stem), Some(path_str)) = (stem_os.to_str(), path.to_str()) {
                         let clean_stem = stem.replace("-", "_").replace(" ", "_");
-                        entries.push((clean_stem, filename.to_string()));
+                        entries.push((clean_stem, path_str.to_string()));
                     }
                 }
             }
