@@ -166,6 +166,7 @@ fn generate_scene_registry_metadata(scene_src: &str, scene_out: &str) -> Result<
     odin_code.push_str("\n");
     odin_code.push_str("_ :: scene\n");
     odin_code.push_str("_ :: generated\n");
+    odin_code.push_str("_ :: type\n");
     odin_code.push_str("\n");
     for (name, _) in &entries {
         odin_code.push_str(&format!("import \"{name}\"\n"));
