@@ -2,6 +2,9 @@
 
 CLI for **bonsai**, a lightweight 2D game framework written in Odin.
 
+> **Note:** Looking for the framework source code? Check out the **[main repository](https://github.com/nihiL7331/bonsai-2d)**.
+> For framework documentation, examples and tutorials, visit **[bonsai-framework.dev](https://bonsai-framework.dev)**.
+
 ## Installation
 
 **If you have cargo installed, simply run:**
@@ -26,7 +29,12 @@ cargo install bonsai-cli
 ### The `--verbose` flag
 
 Every **bonsai** command also accepts a verbose flag, which has to stand **before** the called command, e.g.:
-`bonsai --verbose build --web`
+
+```bash
+bonsai --verbose build --web
+```
+
+---
 
 ### `bonsai init`
 
@@ -174,8 +182,12 @@ Supports **procedures**, **enums**, **structures**, **constants**, **unions** an
 bonsai docs @ref --target ../website/docs
 ```
 
+---
+
 ## Contributing
 
 If you'd like to help build and expand the **bonsai** CLI, feel free to open an issue or PR!
+
+---
 
 ![pot](readme/pot.gif)
