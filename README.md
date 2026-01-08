@@ -199,6 +199,18 @@ bonsai docs @ref --target ../website/docs
 
 ---
 
+## The Project Manifest (`bonsai.toml`)
+
+The CLI automatically manages your project configuration via a manifest file.
+
+**Features:**
+
+- **Web Linking:** the `web_libs` table allows for a quick way to link external C libraries required by Emscripten for web builds.
+- **Dependency Management:** Systems can declare dependencies, which the CLI recursively resolves and installs from the systems repository.
+- **Version Locking**: (WIP) Ensures lack of version conflicts by locking system versions.
+
+---
+
 ## Contributing
 
 If you'd like to help build and expand the **bonsai** CLI, feel free to open an issue or PR!
