@@ -285,7 +285,7 @@ pub fn build_web(config: &str, clean: bool, ui: &Ui) -> Result<(), CustomError> 
     let manifest_content =
         fs::read_to_string(MANIFEST_NAME).map_err(|e| CustomError::IoError(e))?;
 
-    let manifest: Manifest = toml::from_str(&manifest_content)
+    let manifest: Manifest = toml_edit::de::from_str(&manifest_content)
         .map_err(|e| CustomError::ValidationError(format!("Invalid manifest: {}", e)))?;
 
     if !manifest.build.web_libs.is_empty() {

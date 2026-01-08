@@ -4,11 +4,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::fs;
 use std::path::Path;
-use toml_edit::DocumentMut;
-use toml_edit::InlineTable;
-use toml_edit::Value;
-use toml_edit::table;
-use toml_edit::value;
+use toml_edit::{DocumentMut, InlineTable, Value, table, value};
 
 const MANIFEST_FILE: &str = "bonsai.toml";
 const SYSTEM_MANIFEST: &str = "system.toml";
@@ -178,7 +174,7 @@ pub fn create_manifest(destination: &Path, project_name: &str) -> Result<(), Cus
     };
 
     let manifest_path = destination.join(MANIFEST_FILE);
-    let toml_content = toml::to_string_pretty(&manifest).map_err(|e| {
+    let toml_content = toml_edit::ser::to_string_pretty(&manifest).map_err(|e| {
         CustomError::ValidationError(format!("Failed to serialize manifest: {}", e))
     })?;
 
