@@ -2,9 +2,9 @@
 
 bonsai is the lightweight 2D game framework written in Odin.
 
-## Installation
+## ![installation](readme/install.png)
 
-**Get it started via Cargo:**
+**If you have cargo installed, simply run:**
 
 ```bash
 cargo install bonsai-cli
