@@ -3,7 +3,7 @@ use thiserror::Error;
 #[derive(Error, Debug)]
 pub enum CustomError {
     #[error("Git operation failed: {0}")]
-    GitError(#[from] git2::Error),
+    GitError(String),
     #[error("I/O operation failed: {0}")]
     IoError(#[from] std::io::Error),
     #[error("TOML parsing failed: {0}")]

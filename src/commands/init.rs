@@ -1,6 +1,6 @@
 use crate::Ui;
 use crate::error::CustomError;
-use crate::git::clone_with_progress;
+use crate::git::clone_repo;
 use crate::manifest::create_manifest;
 use clap::Args;
 use std::fs;
@@ -73,7 +73,7 @@ pub fn init(args: &InitArgs, ui: Ui) -> Result<(), CustomError> {
 
     ui.log(&format!("Initializing project '{}'.", args.name));
 
-    clone_with_progress(REPO_URL, destination, &args.version, &ui)?;
+    clone_repo(REPO_URL, destination, &args.version, &ui)?;
 
     let git_dir = destination.join(".git");
     if git_dir.exists() {

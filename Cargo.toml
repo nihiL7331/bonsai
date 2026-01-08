@@ -1,25 +1,26 @@
 [package]
-name = "bonsai"
+name = "bonsai-cli"
 version = "0.1.0"
 edition = "2024"
 authors = ["Patryk Pujanek"]
-description = "Bonsai CLI for building and managing games"
+description = "CLI for the bonsai 2D game framework."
 repository = "https://github.com/nihiL7331/bonsai"
 license = "MIT"
 readme = "README.md"
 
+[[bin]]
+name = "bonsai"
+path = "src/main.rs"
+
 [dependencies]
-anyhow = "1.0.100"
 chrono = "0.4.42"
 clap = { version = "4.5.53", features = ["derive"] }
 colored = "3.0.0"
 ctrlc = "3.5.1"
 dirs = "6.0.0"
-git2 = { version = "0.20.3", features = ["vendored-openssl"] }
-image = "0.25.9"
+image = { version = "0.25.9", default-features = false, features = ["png"] }
 indicatif = "0.18.3"
 regex = "1.12.2"
-reqwest = { version = "0.12.26", features = ["blocking"] }
 rouille = "3.6.2"
 scopeguard = "1.2.0"
 semver = "1.0.27"
@@ -28,8 +29,8 @@ serde_json = "1.0.145"
 tempfile = "3.24.0"
 texture_packer = "0.30.0"
 thiserror = "2.0.17"
-toml = "0.9.10"
-toml_edit = "0.24.0"
+toml_edit = { version = "0.24.0", features = ["serde"] }
+ureq = "3.1.4"
 url = "2.5.7"
 wait-timeout = "0.2.1"
 walkdir = "2.5.0"
