@@ -5,6 +5,21 @@ CLI for **bonsai**, a lightweight 2D game framework written in Odin.
 > **Note:** Looking for the framework source code? Check out the **[main repository](https://github.com/nihiL7331/bonsai-2d)**.
 > For framework documentation, examples and tutorials, visit **[bonsai-framework.dev](https://bonsai-framework.dev)**.
 
+## Prerequisites
+
+Before using the CLI, ensure you have the following installed:
+
+- **[Odin Compiler](https://odin-lang.org/)**: Required to compile your game code.
+
+  > Ensure `odin` is in your system PATH.
+
+- **[Git](https://git-scm.com/)**: Required to download templates and libraries.
+
+**For web builds:**
+
+- **[Emscripten SDK](https://emscripten.org)**: Required to compile for the browser (WASM).
+  > Ensure `emcc` is in your system PATH.
+
 ## Installation
 
 **If you have cargo installed, simply run:**
@@ -187,7 +202,5 @@ bonsai docs @ref --target ../website/docs
 ## Contributing
 
 If you'd like to help build and expand the **bonsai** CLI, feel free to open an issue or PR!
-
----
 
 ![pot](readme/pot.gif)
