@@ -1,6 +1,6 @@
 # [![bonsai logo](readme/logo.png)](https://bonsai-framework.dev)
 
-ClI for **bonsai**, a lightweight 2D game framework written in Odin.
+CLI for **bonsai**, a lightweight 2D game framework written in Odin.
 
 ## Installation
 
