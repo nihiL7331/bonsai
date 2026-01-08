@@ -103,15 +103,4 @@ impl Ui {
             clean == "y" || clean == "yes"
         })
     }
-
-    pub fn create_bar(&self) -> ProgressBar {
-        let pb = self.multiprogress.add(ProgressBar::new(0));
-        pb.set_style(
-            ProgressStyle::default_bar()
-                .template("{spinner:.green} [{elapsed_precise}] [{bar:40.cyan/blue}] {pos}/{len}")
-                .unwrap()
-                .progress_chars("#>-"),
-        );
-        pb
-    }
 }
