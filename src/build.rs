@@ -411,7 +411,7 @@ fn compile_sokol(is_web_target: bool, clean: bool, ui: &Ui) -> Result<(), Custom
         Command::new("cmd")
             .args(["/C", script_name])
             .current_dir(sokol_dir)
-            .stdout(Stdio::inherit())
+            .stdout(Stdio::null())
             .stderr(Stdio::inherit())
             .status()
     } else {
@@ -419,7 +419,7 @@ fn compile_sokol(is_web_target: bool, clean: bool, ui: &Ui) -> Result<(), Custom
         Command::new(shell)
             .args([shell_flag, &cmd_string])
             .current_dir(sokol_dir)
-            .stdout(Stdio::inherit())
+            .stdout(Stdio::null())
             .stderr(Stdio::inherit())
             .status()
     }
