@@ -1,5 +1,5 @@
 use crate::Ui;
-use crate::assets::generate_sprite_metadata;
+use crate::assets::{generate_empty_sprite_metadata, generate_sprite_metadata};
 use crate::error::CustomError;
 use std::collections::HashSet;
 use std::fs::{self};
@@ -50,6 +50,7 @@ pub fn pack_atlas(assets_dir: &Path, atlas_dir: &Path, ui: &Ui) -> Result<(), Cu
 
     let sorted_files = get_sorted_image_files(&ctx.images_dir)?;
     if sorted_files.is_empty() {
+        generate_empty_sprite_metadata()?;
         if ui.verbose {
             ui.log("No images to pack in assets directory. Skipping packing.");
         }
