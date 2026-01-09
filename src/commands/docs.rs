@@ -279,7 +279,6 @@ fn write_package_markdown(
     );
 
     if !overview.is_empty() {
-        content.push_str("## Overview\n\n");
         content.push_str(overview);
         content.push_str("\n\n---\n\n");
     }
