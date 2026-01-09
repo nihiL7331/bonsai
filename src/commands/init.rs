@@ -79,6 +79,18 @@ pub fn init(args: &InitArgs, ui: Ui) -> Result<(), CustomError> {
     if git_dir.exists() {
         fs::remove_dir_all(&git_dir)?;
     }
+    let readmemd_dir = destination.join("README.md");
+    if readmemd_dir.exists() {
+        fs::remove_file(&readmemd_dir)?;
+    }
+    let readme_dir = destination.join("readme");
+    if readme_dir.exists() {
+        fs::remove_dir_all(&readme_dir)?;
+    }
+    let gitignore_dir = destination.join(".gitignore");
+    if gitignore_dir.exists() {
+        fs::remove_file(&gitignore_dir)?;
+    }
 
     create_manifest(destination, &args.name)?;
 
