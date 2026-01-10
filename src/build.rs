@@ -499,19 +499,22 @@ fn get_emsdk_path() -> Result<PathBuf, CustomError> {
 }
 
 fn run_in_emsdk(cmd: &str, emsdk_path: &Path) -> Result<(), CustomError> {
-    let emsdk_str = emsdk_path.to_string_lossy();
+    let clean_emsdk_path = to_emcc_path(emsdk_path);
 
     let (shell, flag, command_string) = if cfg!(target_os = "windows") {
         (
             "cmd",
             "/C",
-            format!("call \"{}/emsdk_env.bat\" >nul && {}", emsdk_str, cmd),
+            format!(
+                "call \"{}/emsdk_env.bat\" >nul && {}",
+                clean_emsdk_path, cmd
+            ),
         )
     } else {
         (
             "bash",
             "-c",
-            format!("source \"{}/emsdk_env.sh\" && {}", emsdk_str, cmd),
+            format!("source \"{}/emsdk_env.sh\" && {}", clean_emsdk_path, cmd),
         )
     };
 
