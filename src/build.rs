@@ -16,6 +16,12 @@ const ASSETS_DIR: &str = "assets";
 const ATLAS_DIR: &str = "bonsai/core/render/atlas";
 const BONSAI_DIR: &str = "./bonsai";
 const GAME_DIR: &str = "./source/game";
+const SHADERS_CACHE_DIR: &str = ".bonsai/cache/shaders";
+const SHADERS_INCLUDE_SRC: &str = "bonsai/shaders/include";
+const SHADERS_CORE_VS_NAME: &str = "shader_vs_core.glsl";
+const SHADERS_CORE_FS_NAME: &str = "shader_fs_core.glsl";
+const SHADERS_HEADER_NAME: &str = "shader_header.glsl";
+const SHADERS_UTILS_NAME: &str = "shader_utils.glsl";
 const SHADERS_BONSAI_SRC: &str = "bonsai/shaders/shader.glsl";
 const SHADERS_BONSAI_OUT: &str = "bonsai/shaders/shader.odin";
 const SHADERS_GAME_SRC: &str = "source/shaders";
@@ -90,6 +96,31 @@ fn get_c_libraries() -> Vec<String> {
 
 fn compile_shaders(ui: &Ui) -> Result<(), CustomError> {
     let shdc_path = get_or_install_shdc(ui);
+    let shdc_str = shdc_path.to_string_lossy();
+
+    let cache_dir = Path::new(SHADERS_CACHE_DIR);
+    if cache_dir.exists() {
+        fs::remove_dir_all(cache_dir).map_err(|e| CustomError::IoError(e))?;
+    }
+    fs::create_dir_all(cache_dir).map_err(|e| CustomError::IoError(e))?;
+
+    let include_dir = Path::new(SHADERS_INCLUDE_SRC);
+    fs::copy(
+        include_dir.join(SHADERS_CORE_VS_NAME),
+        cache_dir.join(SHADERS_CORE_VS_NAME),
+    )?;
+    fs::copy(
+        include_dir.join(SHADERS_CORE_FS_NAME),
+        cache_dir.join(SHADERS_CORE_FS_NAME),
+    )?;
+    fs::copy(
+        include_dir.join(SHADERS_UTILS_NAME),
+        cache_dir.join(SHADERS_UTILS_NAME),
+    )?;
+    fs::copy(
+        include_dir.join(SHADERS_HEADER_NAME),
+        cache_dir.join(SHADERS_HEADER_NAME),
+    )?;
 
     let shader_format = if cfg!(target_os = "windows") {
         "glsl300es:hlsl4:glsl430"
@@ -97,23 +128,44 @@ fn compile_shaders(ui: &Ui) -> Result<(), CustomError> {
         "metal_macos:glsl300es:hlsl4:glsl430"
     };
 
-    if !should_skip(Path::new(SHADERS_BONSAI_SRC), Path::new(SHADERS_BONSAI_OUT))? {
-        ui.status("Compiling core shaders...");
+    let compile_shader_cached = |src_path: &Path,
+                                 out_path: &Path,
+                                 log_prefix: &str,
+                                 color: colored::Color|
+     -> Result<(), CustomError> {
+        let filename = src_path.file_name().unwrap();
+        let cached_path = cache_dir.join(filename);
+        let cached_path_str = cached_path.to_str().unwrap();
+        let out_path_str = out_path.to_str().unwrap();
+
+        fs::copy(src_path, &cached_path).map_err(|e| CustomError::IoError(e))?;
+
+        ui.status(&format!("Compiling shader: {}", src_path.to_string_lossy()));
+
         run_with_prefix(
-            &shdc_path.to_string_lossy(),
+            &shdc_str,
             &[
                 "-i",
-                SHADERS_BONSAI_SRC,
+                cached_path_str,
                 "-o",
-                SHADERS_BONSAI_OUT,
+                out_path_str,
                 "-l",
                 shader_format,
                 "-f",
                 "sokol_odin",
             ],
-            "[SHDC]",
-            colored::Color::Cyan,
+            log_prefix,
+            color,
             ui,
+        )
+    };
+
+    if !should_skip(Path::new(SHADERS_BONSAI_SRC), Path::new(SHADERS_BONSAI_OUT))? {
+        compile_shader_cached(
+            Path::new(SHADERS_BONSAI_SRC),
+            Path::new(SHADERS_BONSAI_OUT),
+            "[CORE SHDC]",
+            colored::Color::Cyan,
         )?;
     } else if ui.verbose {
         ui.log("Core shader compilation skipped (already compiled).");
@@ -123,49 +175,25 @@ fn compile_shaders(ui: &Ui) -> Result<(), CustomError> {
 
     for entry in walker.filter_map(|e| e.ok()) {
         let path = entry.path();
-        let output_path = path.with_extension("odin");
-
         if !path.is_file() {
             continue;
         }
+
         match path.extension().and_then(|s| s.to_str()) {
             Some("glsl") | Some("vert") | Some("frag") => {}
             _ => continue,
         }
+
+        let output_path = path.with_extension("odin");
         if should_skip(path, &output_path)? {
             continue;
         }
 
-        let path_str = path.to_str().ok_or_else(|| {
-            CustomError::ValidationError(format!(
-                "Path contains invalid UTF-8 characters: {:?}",
-                path
-            ))
-        })?;
-        let output_path_str = output_path.to_str().ok_or_else(|| {
-            CustomError::ValidationError(format!(
-                "Output path contains invalid UTF-8 characters: {:?}",
-                output_path
-            ))
-        })?;
-
-        ui.status(&format!("Compiling game shader: {}", path_str));
-
-        run_with_prefix(
-            &shdc_path.to_string_lossy(),
-            &[
-                "-i",
-                path_str,
-                "-o",
-                output_path_str,
-                "-l",
-                shader_format,
-                "-f",
-                "sokol_odin",
-            ],
-            "[CUSTOM SHDC]",
+        compile_shader_cached(
+            path,
+            &output_path,
+            "[GAME SHDC]",
             colored::Color::BrightBlue,
-            ui,
         )?;
     }
 
