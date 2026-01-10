@@ -339,7 +339,7 @@ pub fn build_web(config: &str, clean: bool, ui: &Ui) -> Result<(), CustomError> 
     }
 
     let libs_str = libraries.join(" ");
-    let out_html = out_dir.join("index.html").to_string_lossy().to_string();
+    let out_html = to_emcc_path(out_dir.join("index.html").as_path());
 
     let emcc_cmd = format!("emcc -o {} {} {} -g", out_html, libs_str, EMSCRIPTEN_FLAGS);
 
@@ -505,7 +505,7 @@ fn run_in_emsdk(cmd: &str, emsdk_path: &Path) -> Result<(), CustomError> {
         (
             "cmd",
             "/C",
-            format!("call \"{}\\emsdk_env.bat\" >nul && {}", emsdk_str, cmd),
+            format!("call \"{}/emsdk_env.bat\" >nul && {}", emsdk_str, cmd),
         )
     } else {
         (
