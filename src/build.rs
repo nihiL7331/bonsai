@@ -75,7 +75,26 @@ fn prepare_resources(ui: &Ui) -> Result<(), CustomError> {
     Ok(())
 }
 
-fn get_c_libraries() -> Vec<String> {
+fn get_windows_c_libraries() -> Vec<String> {
+    vec![
+        "bonsai\\libs\\sokol\\app\\sokol_app_wasm_gl_release.a".to_string(),
+        "bonsai\\libs\\sokol\\glue\\sokol_glue_wasm_gl_release.a".to_string(),
+        "bonsai\\libs\\sokol\\gfx\\sokol_gfx_wasm_gl_release.a".to_string(),
+        "bonsai\\libs\\sokol\\shape\\sokol_shape_wasm_gl_release.a".to_string(),
+        "bonsai\\libs\\sokol\\log\\sokol_log_wasm_gl_release.a".to_string(),
+        "bonsai\\libs\\sokol\\gl\\sokol_gl_wasm_gl_release.a".to_string(),
+        "bonsai\\libs\\sokol\\audio\\sokol_audio_wasm_gl_release.a".to_string(),
+        "bonsai\\libs\\stb\\lib\\stb_image_wasm.o".to_string(),
+        "bonsai\\libs\\stb\\lib\\stb_image_write_wasm.o".to_string(),
+        "bonsai\\libs\\stb\\lib\\stb_rect_pack_wasm.o".to_string(),
+        "bonsai\\libs\\stb\\lib\\stb_truetype_wasm.o".to_string(),
+    ]
+    .iter()
+    .map(|s| s.to_string())
+    .collect()
+}
+
+fn get_unix_c_libraries() -> Vec<String> {
     vec![
         "bonsai/libs/sokol/app/sokol_app_wasm_gl_release.a".to_string(),
         "bonsai/libs/sokol/glue/sokol_glue_wasm_gl_release.a".to_string(),
@@ -306,7 +325,11 @@ pub fn build_web(config: &str, clean: bool, ui: &Ui) -> Result<(), CustomError> 
     ui.status("Linking with Emscripten...");
     let emsdk_path = get_emsdk_path()?;
 
-    let mut libraries = get_c_libraries();
+    let mut libraries = if cfg!(target_os = "windows") {
+        get_windows_c_libraries()
+    } else {
+        get_unix_c_libraries()
+    };
     libraries.insert(0, object_file.to_string_lossy().to_string());
 
     let manifest_content =
