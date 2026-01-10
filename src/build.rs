@@ -38,11 +38,6 @@ const DESKTOP_BINARY_NAME: &str = if cfg!(windows) {
 const WEB_BINARY_NAME: &str = "game.wasm.o";
 const SOKOL_LIB_DIR: &str = "bonsai/libs/sokol";
 const UTILS_DIR: &str = "utils";
-// for checking whether sokol is compiled already
-const SOKOL_APP_WASM: &str = "app/sokol_app_wasm_gl_release.a";
-const SOKOL_APP_LINUX: &str = "app/sokol_app_linux_x64_gl_release.a";
-const SOKOL_APP_MACOS: &str = "app/sokol_app_macos_arm64_gl_release.a";
-const SOKOL_APP_WINDOWS: &str = "app/sokol_app_windows_x64_gl_release.a";
 // manifest
 const MANIFEST_NAME: &str = "bonsai.toml";
 // emscripten
@@ -401,33 +396,61 @@ fn copy_dir_recursive(src: &Path, dest: &Path) -> std::io::Result<()> {
     Ok(())
 }
 
+fn get_expected_sokol_path(is_web: bool) -> PathBuf {
+    if is_web {
+        return PathBuf::from("app/sokol_app_wasm_gl_release.a");
+    }
+
+    let os = env::consts::OS;
+
+    let arch = match env::consts::ARCH {
+        "x86_64" => "x64",
+        "aarch64" => "arm64",
+        other => other,
+    };
+
+    let backend = match os {
+        "windows" => "d3d11",
+        "macos" => "gl",
+        _ => "gl",
+    };
+
+    let extension = if os == "windows" { "lib" } else { "a" };
+
+    let filename = format!(
+        "sokol_app_{}_{}_{}_release.{}",
+        os, arch, backend, extension
+    );
+
+    Path::new("app").join(filename)
+}
+
 fn compile_sokol(is_web_target: bool, clean: bool, ui: &Ui) -> Result<(), CustomError> {
     ui.status("Compiling sokol...");
 
     let sokol_dir = Path::new(SOKOL_LIB_DIR);
 
-    let (script_name, expected_output, shell, shell_flag) = if is_web_target {
-        get_emsdk_path()?; // this is stupid. but it works.
-
-        let output = SOKOL_APP_WASM;
-
+    let (script_name, shell, shell_flag) = if is_web_target {
+        get_emsdk_path()?;
         if cfg!(windows) {
-            ("build_clibs_wasm.bat", output, "cmd", "/C")
+            ("build_clibs_wasm.bat", "cmd", "/C")
         } else {
-            ("build_clibs_wasm.sh", output, "sh", "-c")
+            ("build_clibs_wasm.sh", "sh", "-c")
         }
     } else {
         if cfg!(target_os = "windows") {
-            ("build_clibs_windows.cmd", SOKOL_APP_WINDOWS, "cmd", "/C")
+            ("build_clibs_windows.cmd", "cmd", "/C")
         } else if cfg!(target_os = "macos") {
-            ("build_clibs_macos.sh", SOKOL_APP_MACOS, "sh", "-c")
+            ("build_clibs_macos.sh", "sh", "-c")
         } else {
-            ("build_clibs_linux.sh", SOKOL_APP_LINUX, "sh", "-c")
+            ("build_clibs_linux.sh", "sh", "-c")
         }
     };
 
     let script_path = sokol_dir.join(script_name);
-    let output_path = sokol_dir.join(expected_output);
+
+    let relative_output_path = get_expected_sokol_path(is_web_target);
+    let output_path = sokol_dir.join(relative_output_path);
 
     if !clean && output_path.exists() {
         ui.status("Sokol compilation skipped (already compiled).");
