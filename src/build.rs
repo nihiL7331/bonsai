@@ -24,7 +24,7 @@ const SHADERS_HEADER_NAME: &str = "shader_header.glsl";
 const SHADERS_UTILS_NAME: &str = "shader_utils.glsl";
 const SHADERS_BONSAI_SRC: &str = "bonsai/shaders/shader.glsl";
 const SHADERS_BONSAI_OUT: &str = "bonsai/shaders/shader.odin";
-const SHADERS_GAME_SRC: &str = "source/shaders";
+const SHADERS_GAME_SRC: &str = "source/game/shaders";
 const SOURCE_DIR: &str = "source";
 // build
 const BUILD_SRC: &str = "build";
