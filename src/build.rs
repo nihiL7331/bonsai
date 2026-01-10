@@ -505,10 +505,7 @@ fn run_in_emsdk(cmd: &str, emsdk_path: &Path) -> Result<(), CustomError> {
         (
             "cmd",
             "/C",
-            format!(
-                "call \"{}/emsdk_env.bat\" >nul && {}",
-                clean_emsdk_path, cmd
-            ),
+            format!("call {}/emsdk_env.bat >nul && {}", clean_emsdk_path, cmd),
         )
     } else {
         (
