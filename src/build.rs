@@ -18,10 +18,10 @@ const BONSAI_DIR: &str = "./bonsai";
 const GAME_DIR: &str = "./source/game";
 const SHADERS_CACHE_DIR: &str = ".bonsai/cache/shaders";
 const SHADERS_INCLUDE_SRC: &str = "bonsai/shaders/include";
-const SHADERS_CORE_VS_NAME: &str = "shader_vs_core.glsl";
-const SHADERS_CORE_FS_NAME: &str = "shader_fs_core.glsl";
-const SHADERS_HEADER_NAME: &str = "shader_header.glsl";
-const SHADERS_UTILS_NAME: &str = "shader_utils.glsl";
+const SHADERS_CORE_VS_NAME: &str = "shader_vs_core/shader_vs_core.glsl";
+const SHADERS_CORE_FS_NAME: &str = "shader_fs_core/shader_fs_core.glsl";
+const SHADERS_HEADER_NAME: &str = "shader_header/shader_header.glsl";
+const SHADERS_UTILS_NAME: &str = "shader_utils/shader_utils.glsl";
 const SHADERS_BONSAI_SRC: &str = "bonsai/shaders/shader.glsl";
 const SHADERS_BONSAI_OUT: &str = "bonsai/shaders/shader.odin";
 const SHADERS_GAME_SRC: &str = "source/game/shaders";
@@ -107,19 +107,19 @@ fn compile_shaders(ui: &Ui) -> Result<(), CustomError> {
     let include_dir = Path::new(SHADERS_INCLUDE_SRC);
     fs::copy(
         include_dir.join(SHADERS_CORE_VS_NAME),
-        cache_dir.join(SHADERS_CORE_VS_NAME),
+        cache_dir.join("shader_vs_core.glsl"),
     )?;
     fs::copy(
         include_dir.join(SHADERS_CORE_FS_NAME),
-        cache_dir.join(SHADERS_CORE_FS_NAME),
+        cache_dir.join("shader_fs_core.glsl"),
     )?;
     fs::copy(
         include_dir.join(SHADERS_UTILS_NAME),
-        cache_dir.join(SHADERS_UTILS_NAME),
+        cache_dir.join("shader_utils.glsl"),
     )?;
     fs::copy(
         include_dir.join(SHADERS_HEADER_NAME),
-        cache_dir.join(SHADERS_HEADER_NAME),
+        cache_dir.join("shader_header.glsl"),
     )?;
 
     let shader_format = if cfg!(target_os = "windows") {
