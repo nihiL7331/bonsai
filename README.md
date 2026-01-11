@@ -28,6 +28,20 @@ Before using the CLI, ensure you have the following installed:
 cargo install bonsai-cli
 ```
 
+**Otherwise, you can install the binary via shell/powershell script:**
+
+**On Linux/MacOS**
+
+```bash
+curl --proto '=https' --tlsv1.2 -LsSf https://github.com/nihiL7331/bonsai/releases/latest/download/bonsai-cli-installer.sh | sh
+```
+
+**On Windows**
+
+```powershell
+powershell -ExecutionPolicy Bypass -c "irm https://github.com/nihiL7331/bonsai/releases/latest/download/bonsai-cli-installer.ps1 | iex"
+```
+
 ## Commands
 
 | Command     | Usage                                  | Description                 |
