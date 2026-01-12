@@ -1,9 +1,20 @@
 use crate::Ui;
 use crate::error::CustomError;
 use std::{env, fs, fs::File, io, path::PathBuf};
+use ureq::Agent;
+use ureq::tls::{RootCerts, TlsConfig};
 
 const SHDC_BASE_URL: &str = "https://raw.githubusercontent.com/floooh/sokol-tools-bin/master/bin";
-const BONSAI_BIN_DIR: &str = ".bonsai/bin";
+
+fn get_install_dir() -> Result<PathBuf, CustomError> {
+    let base_dir = dirs::data_local_dir().ok_or_else(|| {
+        CustomError::ValidationError("Could not find local data directory".into())
+    })?;
+
+    let install_dir = base_dir.join("bonsai").join("bin");
+
+    Ok(install_dir)
+}
 
 fn get_executable_name() -> &'static str {
     if env::consts::OS == "windows" {
@@ -30,12 +41,13 @@ pub fn get_shdc_url() -> Result<String, CustomError> {
 }
 
 fn install_shdc(ui: &Ui) -> Result<PathBuf, CustomError> {
-    let home_dir = dirs::home_dir()
-        .ok_or_else(|| CustomError::ValidationError("Could not find home directory".into()))?;
-
-    let install_dir = home_dir.join(BONSAI_BIN_DIR);
-
-    fs::create_dir_all(&install_dir)?;
+    let install_dir = get_install_dir()?;
+    fs::create_dir_all(&install_dir).map_err(|e| {
+        CustomError::IoError(std::io::Error::new(
+            e.kind(),
+            format!("Failed to create directory {:?}: {}", install_dir, e),
+        ))
+    })?;
 
     let dest_path = install_dir.join(get_executable_name());
     let url = get_shdc_url()?;
@@ -46,7 +58,18 @@ fn install_shdc(ui: &Ui) -> Result<PathBuf, CustomError> {
     ));
     ui.message(&format!("  Source: {}", url));
 
-    let response = ureq::get(&url)
+    let agent = Agent::config_builder()
+        .tls_config(
+            TlsConfig::builder()
+                .root_certs(RootCerts::PlatformVerifier)
+                .build(),
+        )
+        .build()
+        .new_agent();
+
+    let response = agent
+        .get(&url)
+        .header("User-Agent", "bonsai-cli")
         .call()
         .map_err(|e| CustomError::BuildError(format!("Failed to download sokol-shdc: {}", e)))?;
 
@@ -69,8 +92,15 @@ fn install_shdc(ui: &Ui) -> Result<PathBuf, CustomError> {
 }
 
 pub fn get_or_install_shdc(ui: &Ui) -> PathBuf {
-    let home = dirs::home_dir().expect("Home directory required.");
-    let path = home.join(BONSAI_BIN_DIR).join(get_executable_name());
+    let install_dir = match get_install_dir() {
+        Ok(d) => d,
+        Err(e) => {
+            ui.error(&format!("Critical error resolving paths: {}", e));
+            std::process::exit(1);
+        }
+    };
+
+    let path = install_dir.join(get_executable_name());
 
     if path.exists() {
         return path;
@@ -78,8 +108,10 @@ pub fn get_or_install_shdc(ui: &Ui) -> PathBuf {
 
     match install_shdc(ui) {
         Ok(p) => p,
-        Err(_) => {
-            ui.error("Failed to install sokol-shdc. Please check your internet connection.");
+        Err(e) => {
+            ui.error(&format!("Failed to install sokol-shdc: {}", e));
+
+            ui.error("Make sure you have internet access and file write permissions.");
             std::process::exit(1);
         }
     }
