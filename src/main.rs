@@ -51,6 +51,8 @@ fn handle_result(res: Result<(), crate::error::CustomError>, context: &str) {
 }
 
 fn main() {
+    let _ = enable_ansi_support::enable_ansi_support();
+
     let cli = Cli::parse();
 
     let ui = Ui::new(cli.verbose);
