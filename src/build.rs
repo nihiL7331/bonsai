@@ -207,7 +207,6 @@ fn compile_project(
 ) -> Result<PathBuf, CustomError> {
     let is_debug = config == "debug";
     sokol::compile_sokol(is_web_target, is_debug, clean, ui)?;
-    // compile_sokol(is_web_target, clean, ui)?;
 
     let (out_dir_str, binary_name) = if is_web_target {
         (BUILD_WEB_DIR, WEB_BINARY_NAME)
@@ -349,7 +348,6 @@ pub fn build_web(config: &str, clean: bool, ui: &Ui) -> Result<(), CustomError> 
     Ok(())
 }
 
-//TODO: clean user shaders
 pub fn clean_build(ui: &Ui) -> Result<(), CustomError> {
     let build_dir = Path::new(BUILD_SRC);
     if build_dir.exists() {
