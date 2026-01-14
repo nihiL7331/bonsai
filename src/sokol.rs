@@ -61,9 +61,9 @@ pub fn compile_sokol(
         if check.is_err() {
             return Err(CustomError::BuildError(
                 "The 'cl' command (MSVC compiler) was not found.\n\
-                For Sokol compilation on Windows, you must rin this tool from the \
-                'Visual Studio Developer Command Prompt' or a terminal with Build Tools initialized."
-                .to_string()
+                For Sokol compilation on Windows, you must run this tool from the \
+                'Visual Studio Developer Command Prompt' or a terminal with Build Tools initialized"
+                    .to_string(),
             ));
         }
     }
@@ -184,7 +184,7 @@ fn compile_sokol_wasm(clean: bool, ui: &Ui) -> Result<(), CustomError> {
     if check.is_err() {
         return Err(CustomError::BuildError(
             "The 'emcc' command was not found.\n\
-            Please install the Emscripten SDK and run 'emsdk_env' to add it to your PATH."
+            Please install the Emscripten SDK and run 'emsdk_env' to add it to your PATH"
                 .to_string(),
         ));
     }
