@@ -21,6 +21,7 @@ dirs = "6.0.0"
 enable-ansi-support = "0.3.1"
 image = { version = "0.25.9", default-features = false, features = ["png"] }
 indicatif = "0.18.3"
+rayon = "1.11.0"
 regex = "1.12.2"
 rouille = "3.6.2"
 scopeguard = "1.2.0"

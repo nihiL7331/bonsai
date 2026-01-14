@@ -4,6 +4,7 @@ use crate::error::CustomError;
 use crate::manifest::{Manifest, update_manifest};
 use crate::packer::pack_atlas;
 use crate::shdc::get_or_install_shdc;
+use crate::sokol;
 use colored::Colorize;
 use std::io::{BufRead, BufReader};
 use std::path::{Path, PathBuf};
@@ -36,7 +37,7 @@ const DESKTOP_BINARY_NAME: &str = if cfg!(windows) {
     "game_desktop.bin"
 };
 const WEB_BINARY_NAME: &str = "game.wasm.o";
-const SOKOL_LIB_DIR: &str = "bonsai/libs/sokol";
+// const SOKOL_LIB_DIR: &str = "bonsai/libs/sokol";
 const UTILS_DIR: &str = "utils";
 // manifest
 const MANIFEST_NAME: &str = "bonsai.toml";
@@ -205,7 +206,9 @@ fn compile_project(
     clean: bool,
     ui: &Ui,
 ) -> Result<PathBuf, CustomError> {
-    compile_sokol(is_web_target, clean, ui)?;
+    let is_debug = config == "debug";
+    sokol::compile_sokol(is_web_target, is_debug, clean, ui)?;
+    // compile_sokol(is_web_target, clean, ui)?;
 
     let (out_dir_str, binary_name) = if is_web_target {
         (BUILD_WEB_DIR, WEB_BINARY_NAME)
@@ -396,101 +399,101 @@ fn copy_dir_recursive(src: &Path, dest: &Path) -> std::io::Result<()> {
     Ok(())
 }
 
-fn get_expected_sokol_path(is_web: bool) -> PathBuf {
-    if is_web {
-        return PathBuf::from("app/sokol_app_wasm_gl_release.a");
-    }
-
-    let os = env::consts::OS;
-
-    let arch = match env::consts::ARCH {
-        "x86_64" => "x64",
-        "aarch64" => "arm64",
-        other => other,
-    };
-
-    let backend = match os {
-        "windows" => "d3d11",
-        "macos" => "gl",
-        _ => "gl",
-    };
-
-    let extension = if os == "windows" { "lib" } else { "a" };
-
-    let filename = format!(
-        "sokol_app_{}_{}_{}_release.{}",
-        os, arch, backend, extension
-    );
-
-    Path::new("app").join(filename)
-}
-
-fn compile_sokol(is_web_target: bool, clean: bool, ui: &Ui) -> Result<(), CustomError> {
-    ui.status("Compiling sokol...");
-
-    let sokol_dir = Path::new(SOKOL_LIB_DIR);
-
-    let (script_name, shell, shell_flag) = if is_web_target {
-        get_emsdk_path()?;
-        if cfg!(windows) {
-            ("build_clibs_wasm.bat", "cmd", "/C")
-        } else {
-            ("build_clibs_wasm.sh", "sh", "-c")
-        }
-    } else {
-        if cfg!(target_os = "windows") {
-            ("build_clibs_windows.cmd", "cmd", "/C")
-        } else if cfg!(target_os = "macos") {
-            ("build_clibs_macos.sh", "sh", "-c")
-        } else {
-            ("build_clibs_linux.sh", "sh", "-c")
-        }
-    };
-
-    let script_path = sokol_dir.join(script_name);
-
-    let relative_output_path = get_expected_sokol_path(is_web_target);
-    let output_path = sokol_dir.join(relative_output_path);
-
-    if !clean && output_path.exists() {
-        ui.status("Sokol compilation skipped (already compiled).");
-        return Ok(());
-    }
-
-    if !script_path.exists() {
-        return Err(CustomError::BuildError(format!(
-            "Sokol build script not found at: {}",
-            script_path.display()
-        )));
-    }
-
-    let status = if cfg!(windows) {
-        Command::new("cmd")
-            .args(["/C", script_name])
-            .current_dir(sokol_dir)
-            .stdout(Stdio::null())
-            .stderr(Stdio::inherit())
-            .status()
-    } else {
-        let cmd_string = format!("./{}", script_name);
-        Command::new(shell)
-            .args([shell_flag, &cmd_string])
-            .current_dir(sokol_dir)
-            .stdout(Stdio::null())
-            .stderr(Stdio::inherit())
-            .status()
-    }
-    .map_err(|e| CustomError::ProcessError(format!("Failed to run sokol script: {}", e)))?;
-
-    if !status.success() {
-        return Err(CustomError::BuildError(format!(
-            "Sokol compilation failed: {}",
-            script_name
-        )));
-    }
-
-    Ok(())
-}
+// fn get_expected_sokol_path(is_web: bool) -> PathBuf {
+//     if is_web {
+//         return PathBuf::from("app/sokol_app_wasm_gl_release.a");
+//     }
+//
+//     let os = env::consts::OS;
+//
+//     let arch = match env::consts::ARCH {
+//         "x86_64" => "x64",
+//         "aarch64" => "arm64",
+//         other => other,
+//     };
+//
+//     let backend = match os {
+//         "windows" => "d3d11",
+//         "macos" => "gl",
+//         _ => "gl",
+//     };
+//
+//     let extension = if os == "windows" { "lib" } else { "a" };
+//
+//     let filename = format!(
+//         "sokol_app_{}_{}_{}_release.{}",
+//         os, arch, backend, extension
+//     );
+//
+//     Path::new("app").join(filename)
+// }
+//
+// fn compile_sokol(is_web_target: bool, clean: bool, ui: &Ui) -> Result<(), CustomError> {
+//     ui.status("Compiling sokol...");
+//
+//     let sokol_dir = Path::new(SOKOL_LIB_DIR);
+//
+//     let (script_name, shell, shell_flag) = if is_web_target {
+//         get_emsdk_path()?;
+//         if cfg!(windows) {
+//             ("build_clibs_wasm.bat", "cmd", "/C")
+//         } else {
+//             ("build_clibs_wasm.sh", "sh", "-c")
+//         }
+//     } else {
+//         if cfg!(target_os = "windows") {
+//             ("build_clibs_windows.cmd", "cmd", "/C")
+//         } else if cfg!(target_os = "macos") {
+//             ("build_clibs_macos.sh", "sh", "-c")
+//         } else {
+//             ("build_clibs_linux.sh", "sh", "-c")
+//         }
+//     };
+//
+//     let script_path = sokol_dir.join(script_name);
+//
+//     let relative_output_path = get_expected_sokol_path(is_web_target);
+//     let output_path = sokol_dir.join(relative_output_path);
+//
+//     if !clean && output_path.exists() {
+//         ui.status("Sokol compilation skipped (already compiled).");
+//         return Ok(());
+//     }
+//
+//     if !script_path.exists() {
+//         return Err(CustomError::BuildError(format!(
+//             "Sokol build script not found at: {}",
+//             script_path.display()
+//         )));
+//     }
+//
+//     let status = if cfg!(windows) {
+//         Command::new("cmd")
+//             .args(["/C", script_name])
+//             .current_dir(sokol_dir)
+//             .stdout(Stdio::null())
+//             .stderr(Stdio::inherit())
+//             .status()
+//     } else {
+//         let cmd_string = format!("./{}", script_name);
+//         Command::new(shell)
+//             .args([shell_flag, &cmd_string])
+//             .current_dir(sokol_dir)
+//             .stdout(Stdio::null())
+//             .stderr(Stdio::inherit())
+//             .status()
+//     }
+//     .map_err(|e| CustomError::ProcessError(format!("Failed to run sokol script: {}", e)))?;
+//
+//     if !status.success() {
+//         return Err(CustomError::BuildError(format!(
+//             "Sokol compilation failed: {}",
+//             script_name
+//         )));
+//     }
+//
+//     Ok(())
+// }
 
 fn get_emsdk_path() -> Result<PathBuf, CustomError> {
     if let Ok(path) = env::var("EMSDK") {

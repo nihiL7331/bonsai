@@ -10,6 +10,7 @@ mod git;
 mod manifest;
 mod packer;
 mod shdc;
+mod sokol;
 mod ui;
 
 use commands::build_cmd::{self, BuildArgs};
