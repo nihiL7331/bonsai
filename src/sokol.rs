@@ -300,7 +300,7 @@ fn build_windows(
     ));
     let lib = root_dir.join(format!(
         "{}/{}_windows_{}_{}_{}.lib",
-        folder, module, module, arch, suffix, profile_suffix
+        folder, module, arch, suffix, profile_suffix
     ));
 
     let mut cmd = Command::new("cl");
