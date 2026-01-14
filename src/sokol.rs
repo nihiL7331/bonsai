@@ -299,7 +299,7 @@ fn build_windows(
         module, arch, suffix, profile_suffix
     ));
     let lib = root_dir.join(format!(
-        "{}/{}_{}_windows_{}_{}_{}.lib",
+        "{}/{}_windows_{}_{}_{}.lib",
         folder, module, module, arch, suffix, profile_suffix
     ));
 
