@@ -131,15 +131,6 @@ pub fn compile_sokol(
         if ui.verbose {
             ui.status("Building Windows DLLs...");
         }
-        // backends.par_iter().for_each(|backend| {
-        //     for profile in &profiles {
-        //         build_windows_dll(backend, profile, arch_suffix)?;
-        //     }
-        // });
-        //
-        // let _ = Command::new("cmd")
-        //     .args(&["/C", "del sokol.obj 2>NUL"])
-        //     .output();
     }
 
     Ok(())
@@ -335,8 +326,8 @@ fn build_unix(
     let src = root_dir.join(format!("c/{}.c", module));
     let obj = root_dir.join(format!("{}_{}_{}.o", module, suffix, profile_suffix));
     let lib = root_dir.join(format!(
-        "{}/{}_{}_{}_{}_{}_{}.a",
-        folder, module, module, os, arch, suffix, profile_suffix
+        "{}/{}_{}_{}_{}_{}.a",
+        folder, module, os, arch, suffix, profile_suffix
     ));
 
     let mut cmd = Command::new("clang");
