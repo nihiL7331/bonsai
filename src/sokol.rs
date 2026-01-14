@@ -20,6 +20,26 @@ const SOKOL_MODULES: &[&str] = &[
     "sokol_gl",
 ];
 
+fn clean_dir(path: &Path) {
+    if !path.exists() {
+        return;
+    }
+
+    if let Ok(entries) = fs::read_dir(path) {
+        for entry in entries.flatten() {
+            let file_path = entry.path();
+
+            if let Some(ext) = file_path.extension().and_then(|e| e.to_str()) {
+                if ext == "odin" {
+                    continue;
+                }
+
+                let _ = fs::remove_file(&file_path);
+            }
+        }
+    }
+}
+
 pub fn compile_sokol(
     is_web_target: bool,
     is_debug: bool,
@@ -28,6 +48,7 @@ pub fn compile_sokol(
 ) -> Result<(), CustomError> {
     if is_web_target {
         compile_sokol_wasm(clean, ui)?;
+        return Ok(());
     }
 
     if cfg!(windows) {
@@ -97,6 +118,13 @@ pub fn compile_sokol(
 
     if clean {
         ui.status("Cleaning sokol artifacts...");
+
+        for module in SOKOL_MODULES {
+            let folder_name = module.strip_prefix("sokol_").unwrap_or(module);
+            let target_dir = sokol_dir.join(folder_name);
+
+            clean_dir(&target_dir);
+        }
     }
 
     let mut tasks = Vec::new();
@@ -180,6 +208,12 @@ fn compile_sokol_wasm(clean: bool, ui: &Ui) -> Result<(), CustomError> {
 
     if clean {
         ui.status("Cleaning WASM artifacts...");
+
+        for module in modules {
+            let target_dir = sokol_dir.join(module);
+
+            clean_dir(&target_dir);
+        }
     }
 
     let mut tasks = Vec::new();
