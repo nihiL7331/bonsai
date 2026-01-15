@@ -1,6 +1,6 @@
 [package]
 name = "bonsai-cli"
-version = "0.1.11"
+version = "0.1.12"
 edition = "2024"
 authors = ["Patryk Pujanek"]
 description = "CLI for the bonsai 2D game framework."
