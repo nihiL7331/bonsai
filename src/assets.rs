@@ -15,7 +15,6 @@ const SPRITE_OUTPUT_DIR: &str = "bonsai/generated/sprite.odin";
 const FONT_SRC_DIR: &str = "assets/fonts";
 const FONT_OUT_DIR: &str = "bonsai/generated/font.odin";
 const ADDITIONAL_FONT_ENUM: &str = "PixelCode";
-//HACK: go backwards  to leave assets/fonts since filenames are relative to that path
 const ADDITIONAL_FONT_FILENAME: &str = "bonsai/core/ui/PixelCode.ttf";
 //audio
 const AUDIO_SRC_DIR: &str = "assets/audio";

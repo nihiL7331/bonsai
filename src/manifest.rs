@@ -149,14 +149,16 @@ pub fn update_manifest(project_root: &Path, ui: &Ui) -> Result<(), CustomError> 
 fn create_default_system_toml(path: &Path, name: &str) -> Result<(), CustomError> {
     let template = format!(
         r#"[system]
-name = "{}"
-version = "0.0.1"
+name = {}
+version = {}
 description = "Auto-generated description for {}"
 
 [dependencies]
 # Add system dependencies here
 "#,
-        name, name
+        name,
+        env!("CARGO_PKG_VERSION"),
+        name
     );
 
     fs::write(path, template)?;
@@ -167,7 +169,7 @@ pub fn create_manifest(destination: &Path, project_name: &str) -> Result<(), Cus
     let manifest = Manifest {
         project: ProjectInfo {
             name: project_name.to_string(),
-            version: "0.0.1".to_string(), //TODO: use release tag here
+            version: env!("CARGO_PKG_VERSION").to_string(),
         },
         build: BuildOptions { web_libs: vec![] },
         systems: BTreeMap::new(),
