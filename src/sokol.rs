@@ -110,9 +110,7 @@ pub fn compile_sokol(
     let check_path = sokol_dir.join(&check_lib_name);
 
     if !clean && check_path.exists() {
-        if ui.verbose {
-            ui.log("Sokol compilation skipped (already compiled).");
-        }
+        ui.status("Sokol compilation skipped (already compiled).");
         return Ok(());
     }
 
@@ -165,6 +163,14 @@ pub fn compile_sokol(
 }
 
 fn compile_sokol_wasm(clean: bool, ui: &Ui) -> Result<(), CustomError> {
+    let sokol_dir = Path::new(SOKOL_LIB_DIR);
+    let check_path = sokol_dir.join("app/sokol_app_wasm_gl_release.a");
+
+    if !clean && check_path.exists() {
+        ui.status("Sokol compilation skipped (already compiled).");
+        return Ok(());
+    }
+
     ui.status("Compiling sokol (WASM)...");
 
     let sokol_dir = Path::new(SOKOL_LIB_DIR);
