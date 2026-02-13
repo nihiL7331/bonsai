@@ -15,7 +15,7 @@ const SPRITE_OUTPUT_DIR: &str = "bonsai/generated/sprite.odin";
 const FONT_SRC_DIR: &str = "assets/fonts";
 const FONT_OUT_DIR: &str = "bonsai/generated/font.odin";
 const ADDITIONAL_FONT_ENUM: &str = "PixelCode";
-const ADDITIONAL_FONT_FILENAME: &str = "bonsai/core/ui/PixelCode.ttf";
+const ADDITIONAL_FONT_FILENAME: &str = "bonsai/core/ui/PixelCode_12.ttf";
 //audio
 const AUDIO_SRC_DIR: &str = "assets/audio";
 const AUDIO_OUT_DIR: &str = "bonsai/generated/audio.odin";
@@ -36,6 +36,16 @@ fn clean_key_suffix(mut clean_key: String) -> Result<String, CustomError> {
         }
     }
     Ok(clean_key)
+}
+
+fn parse_font_stem(stem: &str) -> (String, Option<i32>) {
+    if let Some(last_underscore) = stem.rfind('_') {
+        let suffix = &stem[last_underscore + 1..];
+        if let Ok(size) = suffix.parse::<i32>() {
+            return (stem[..last_underscore].to_string(), Some(size));
+        }
+    }
+    (stem.to_string(), None)
 }
 
 //this is separated from generate_asset_metadata, since there's a lot of "custom" logic here
@@ -319,7 +329,8 @@ fn generate_asset_metadata(
     let asset_dir = Path::new(asset_src);
     let output_file = Path::new(asset_out);
 
-    let mut entries = vec![];
+    let mut entries: Vec<(String, String, Option<i32>)> = vec![];
+
     if asset_dir.exists() {
         for entry in fs::read_dir(asset_dir)? {
             let entry = entry?;
@@ -335,11 +346,27 @@ fn generate_asset_metadata(
             if is_match {
                 if let Some(stem_os) = path.file_stem() {
                     if let (Some(stem), Some(path_str)) = (stem_os.to_str(), path.to_str()) {
-                        let clean_stem = stem.replace("-", "_").replace(" ", "_");
-                        entries.push((clean_stem, path_str.to_string()));
+                        let mut clean_stem = stem.replace("-", "_").replace(" ", "_");
+                        let mut size = None;
+
+                        if enum_name == "Font" {
+                            let (stripped_stem, extracted_size) = parse_font_stem(&clean_stem);
+                            clean_stem = stripped_stem;
+                            size = extracted_size;
+                        }
+
+                        entries.push((clean_stem, path_str.to_string(), size));
                     }
                 }
             }
+        }
+    }
+
+    let mut additional_size = None;
+    if !additional_asset_filename.is_empty() && enum_name == "Font" {
+        if let Some(stem) = Path::new(additional_asset_filename).file_stem().and_then(|s| s.to_str()) {
+            let (_, extracted_size) = parse_font_stem(stem);
+            additional_size = extracted_size;
         }
     }
 
@@ -358,7 +385,7 @@ fn generate_asset_metadata(
     if additional_asset_enum != "" && additional_asset_filename != "" {
         odin_code.push_str(&format!("\t{}, \n", additional_asset_enum));
     }
-    for (name, _) in &entries {
+    for (name, _, _) in &entries {
         odin_code.push_str(&format!("\t{}, \n", name));
     }
     odin_code.push_str("}\n\n");
@@ -382,9 +409,33 @@ fn generate_asset_metadata(
                 additional_asset_enum, additional_asset_filename
             ));
         }
-        for (name, file) in &entries {
+        for (name, file, _) in &entries {
             odin_code.push_str(&format!("\t.{} = \"{}\",\n", name, file));
         }
+        odin_code.push_str("}\n");
+    }
+
+    if enum_name == "Font" {
+        odin_code.push_str("\n// @ref\n");
+        odin_code.push_str("// Returns the native size of the font parsed from its filename.\n");
+        odin_code.push_str("// Returns 0 if no size is specified.\n");
+        odin_code.push_str("getFontNativeSize :: proc(font: FontName) -> uint {\n");
+        odin_code.push_str("\t#partial switch font {\n");
+        
+        if !additional_asset_enum.is_empty() {
+            if let Some(size) = additional_size {
+                odin_code.push_str(&format!("\tcase .{}: return {}\n", additional_asset_enum, size));
+            }
+        }
+
+        for (name, _, size_opt) in &entries {
+            if let Some(size) = size_opt {
+                odin_code.push_str(&format!("\tcase .{}: return {}\n", name, size));
+            }
+        }
+
+        odin_code.push_str("\t}\n");
+        odin_code.push_str("\treturn 0\n");
         odin_code.push_str("}\n");
     }
 
