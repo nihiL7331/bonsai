@@ -1,11 +1,13 @@
 use crate::Ui;
 use crate::assets::{generate_empty_sprite_metadata, generate_sprite_metadata};
 use crate::error::CustomError;
-use std::collections::HashSet;
+use std::collections::BTreeSet;
 use std::fs::{self};
 use std::path::{Path, PathBuf};
 use texture_packer::{TexturePacker, TexturePackerConfig, exporter::ImageExporter};
 use walkdir::WalkDir;
+use std::io::Cursor;
+use image::ImageFormat;
 
 const ATLAS_NAME: &str = "atlas.png";
 const IMAGES_DIR_NAME: &str = "images";
@@ -24,6 +26,11 @@ struct AtlasOutput {
     height: u32,
 }
 
+pub struct HotReloadPayload {
+    pub png_bytes: Vec<u8>,
+    pub metadata_bin: Vec<u8>,
+}
+
 impl AtlasContext {
     fn new(assets_dir: &Path, atlas_dir: &Path) -> Self {
         let images_dir = assets_dir.join(IMAGES_DIR_NAME);
@@ -40,12 +47,12 @@ impl AtlasContext {
     }
 }
 
-pub fn pack_atlas(assets_dir: &Path, atlas_dir: &Path, ui: &Ui) -> Result<(), CustomError> {
+pub fn pack_atlas(assets_dir: &Path, atlas_dir: &Path, ui: &Ui) -> Result<Option<HotReloadPayload>, CustomError> {
     let ctx = AtlasContext::new(assets_dir, atlas_dir);
 
     if !should_repack(&ctx.images_dir, &ctx.atlas_path)? && ui.verbose {
         ui.log("Atlas is up to date. Skipping packing.");
-        return Ok(());
+        return Ok(None);
     }
 
     let sorted_files = get_sorted_image_files(&ctx.images_dir)?;
@@ -54,7 +61,7 @@ pub fn pack_atlas(assets_dir: &Path, atlas_dir: &Path, ui: &Ui) -> Result<(), Cu
         if ui.verbose {
             ui.log("No images to pack in assets directory. Skipping packing.");
         }
-        return Ok(());
+        return Ok(None);
     }
 
     if ui.verbose {
@@ -72,12 +79,15 @@ pub fn pack_atlas(assets_dir: &Path, atlas_dir: &Path, ui: &Ui) -> Result<(), Cu
         ..Default::default()
     };
     let mut packer = TexturePacker::new_skyline(config);
-    let mut extruded_sprites: HashSet<String> = HashSet::new();
+    let mut extruded_sprites: BTreeSet<String> = BTreeSet::new();
     process_images(&ctx, &sorted_files, &mut packer, &mut extruded_sprites, ui)?;
-    let output = write_atlas(&ctx, &packer, ui)?;
-    generate_sprite_metadata(&packer, output.width, output.height, &extruded_sprites)?;
+    let (output, png_bytes) = write_atlas(&ctx, &packer, ui)?;
+    let metadata_bin = generate_sprite_metadata(&packer, output.width, output.height, &extruded_sprites)?;
 
-    Ok(())
+    Ok(Some(HotReloadPayload {
+        png_bytes,
+        metadata_bin,
+    }))
 }
 
 fn get_sorted_image_files(dir: &Path) -> Result<Vec<PathBuf>, CustomError> {
@@ -110,7 +120,7 @@ fn process_images(
     ctx: &AtlasContext,
     files: &[PathBuf],
     packer: &mut TexturePacker<image::RgbaImage, String>,
-    extruded_sprites: &mut HashSet<String>,
+    extruded_sprites: &mut BTreeSet<String>,
     ui: &Ui,
 ) -> Result<(), CustomError> {
     for path in files {
@@ -221,7 +231,7 @@ fn write_atlas(
     ctx: &AtlasContext,
     packer: &TexturePacker<image::RgbaImage, String>,
     ui: &Ui,
-) -> Result<AtlasOutput, CustomError> {
+) -> Result<(AtlasOutput, Vec<u8>), CustomError> {
     let atlas_image = ImageExporter::export(packer, None)
         .map_err(|e| CustomError::BuildError(format!("Failed to export atlas: {}", e)))?;
 
@@ -230,6 +240,10 @@ fn write_atlas(
     atlas_image
         .save(&ctx.atlas_path)
         .map_err(|_| CustomError::BuildError("Failed to save atlas".to_string()))?;
+
+    let mut png_bytes: Vec<u8> = Vec::new();
+    atlas_image.write_to(&mut Cursor::new(&mut png_bytes), ImageFormat::Png)
+        .map_err(|_| CustomError::BuildError("Failed to encode PNG to memory".to_string()))?;
 
     if ui.verbose {
         ui.log(&format!(
@@ -240,10 +254,10 @@ fn write_atlas(
         ));
     }
 
-    Ok(AtlasOutput {
+    Ok((AtlasOutput {
         width: atlas_image.width(),
         height: atlas_image.height(),
-    })
+    }, png_bytes))
 }
 
 fn should_repack(source_dir: &Path, target_file: &Path) -> Result<bool, CustomError> {

@@ -51,7 +51,8 @@ const EMSCRIPTEN_FLAGS: &str = "-sWASM_BIGINT \
 --preload-file bonsai/core/render/atlas \
 --preload-file assets/audio \
 --preload-file assets/fonts \
---preload-file bonsai/core/ui/PixelCode_12.ttf";
+--preload-file bonsai/core/ui/PixelCode_12.ttf \
+--preload-file .bonsai/cache/sprites/sprites.bin";
 
 pub struct BuildResult {
     pub executable_path: PathBuf,

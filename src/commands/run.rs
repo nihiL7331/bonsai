@@ -3,13 +3,19 @@ use crate::error::CustomError;
 use crate::ui::Ui;
 use clap::Args;
 use colored::Colorize;
+use notify_debouncer_mini::{new_debouncer, notify::RecursiveMode};
 use rouille::Server;
-use std::path::Path;
+use std::net::TcpListener;
+use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
-use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{mpsc, Arc};
 use std::thread;
-use std::time::Duration;
+use std::time::{Instant, Duration};
+use crate::packer::pack_atlas;
+
+const ASSETS_IMAGES_DIR: &str = "assets";
+const ATLAS_DIR: &str = "bonsai/core/render/atlas";
 
 #[derive(Args)]
 pub struct RunArgs {
@@ -57,6 +63,10 @@ pub fn run(args: &RunArgs, ui: Ui) -> Result<(), CustomError> {
         clean_build(&ui)?;
     }
 
+    let ws_port = args.port + 1;
+    let watch_dir = project_dir.join(ASSETS_IMAGES_DIR);
+    spawn_hot_reloader(&ui, ws_port, watch_dir, args.web);
+
     if args.web {
         run_web(args, &ui)?;
     } else {
@@ -64,6 +74,110 @@ pub fn run(args: &RunArgs, ui: Ui) -> Result<(), CustomError> {
     }
 
     Ok(())
+}
+
+fn spawn_hot_reloader(ui: &Ui, ws_port: u16, target_dir: PathBuf, is_web: bool) {
+    if !target_dir.exists() {
+        ui.error(&format!("Watch directory missing: {}", target_dir.display()));
+        return;
+    }
+
+    let ui_clone = ui.clone();
+    let ui_ws_clone = ui.clone();
+
+    let (tx, rx) = mpsc::channel::<Vec<u8>>();
+
+    thread::spawn(move || {
+        let (debounce_tx, debounce_rx) = mpsc::channel();
+        let mut debouncer = new_debouncer(Duration::from_millis(200), debounce_tx)
+            .expect("Failed to create file watcher");
+
+        debouncer
+            .watcher()
+            .watch(&target_dir, RecursiveMode::Recursive)
+            .expect("Failed to watch target directory");
+
+        ui_clone.status("Hot reloader waiting for asset changes...");
+
+        let mut last_repack_time = Instant::now() - Duration::from_secs(10);
+        let cooldown_duration = Duration::from_millis(1000);
+
+        for result in debounce_rx {
+            if let Ok(events) = result {
+                let mut should_repack = false;
+                for event in events {
+                    if let Some(ext) = event.path.extension() {
+                        if ext == "png" {
+                            should_repack = true;
+                        }
+                    }
+                }
+
+                if should_repack {
+                    if last_repack_time.elapsed() < cooldown_duration {
+                        continue;
+                    }
+
+                    last_repack_time = Instant::now();
+
+                    ui_clone.status("Repacking atlas...");
+
+                    let atlas_output_dir = Path::new(ATLAS_DIR);
+
+                    match pack_atlas(&target_dir, &atlas_output_dir, &ui_clone) {
+                        Ok(Some(payload)) => {
+                            let mut ws_binary = Vec::new();
+
+                            let bin_len = payload.metadata_bin.len() as u32;
+
+                            ws_binary.extend_from_slice(&bin_len.to_le_bytes());
+                            ws_binary.extend_from_slice(&payload.metadata_bin);
+                            ws_binary.extend_from_slice(&payload.png_bytes);
+
+                            let _ = tx.send(ws_binary);
+                        }
+                        Ok(None) => {}
+                        Err(e) => ui_clone.error(&format!("Packer failed: {}", e)),
+                    }
+                }
+            }
+        }
+    });
+
+    if is_web {
+        thread::spawn(move || {
+            let addr = format!("0.0.0.0:{}", ws_port);
+            let server = TcpListener::bind(&addr).expect("Failed to bind WS port");
+
+            server.set_nonblocking(true).expect("Cannot set non-blocking");
+
+            ui_ws_clone.message(&format!(
+                "{} WebSocket hot-reload server running at ws://localhost:{}",
+                "[INFO]".green(),
+                ws_port,
+            ));
+
+            let mut clients = Vec::new();
+
+            loop {
+                if let Ok((stream, _)) = server.accept() {
+                    stream.set_nonblocking(false).unwrap();
+                    if let Ok(ws) = tungstenite::accept(stream) {
+                        clients.push(ws);
+                    }
+                }
+
+                if let Ok(payload) = rx.try_recv() {
+                    clients.retain_mut(|client| {
+                        let msg = tungstenite::Message::Binary(payload.clone().into());
+                        client.send(msg).is_ok()
+                    });
+                }
+
+                thread::sleep(Duration::from_millis(16));
+            }
+        });
+    }
 }
 
 fn run_desktop(args: &RunArgs, ui: &Ui) -> Result<(), CustomError> {
