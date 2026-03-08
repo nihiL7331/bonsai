@@ -1,9 +1,12 @@
 use crate::error::CustomError;
-use std::collections::BTreeSet;
+use std::collections::{BTreeSet, HashMap};
 use std::fs;
 use std::path::Path;
 use texture_packer::TexturePacker;
 use serde::Serialize;
+use crate::packer::{pack_font, GlyphMetrics};
+use crate::Ui;
+use fontdue::FontSettings;
 
 enum AssetSearchMode<'a> {
     ByExtension(&'a str),
@@ -27,8 +30,10 @@ const SPRITE_BINARY_DIR: &str = ".bonsai/cache/sprites/sprites.bin";
 //font
 const FONT_SRC_DIR: &str = "assets/fonts";
 const FONT_OUT_DIR: &str = "bonsai/generated/font.odin";
+const FONT_DATA_OUT_DIR: &str = ".bonsai/cache/fonts";
 const ADDITIONAL_FONT_ENUM: &str = "PixelCode";
 const ADDITIONAL_FONT_FILENAME: &str = "bonsai/core/ui/PixelCode_12.ttf";
+const ADDITIONAL_FONT_DIR: &str = "bonsai/core/ui";
 //audio
 const AUDIO_SRC_DIR: &str = "assets/audio";
 const AUDIO_OUT_DIR: &str = "bonsai/generated/audio.odin";
@@ -51,10 +56,10 @@ fn clean_key_suffix(mut clean_key: String) -> Result<String, CustomError> {
     Ok(clean_key)
 }
 
-fn parse_font_stem(stem: &str) -> (String, Option<i32>) {
+pub fn parse_font_stem(stem: &str) -> (String, Option<u8>) {
     if let Some(last_underscore) = stem.rfind('_') {
         let suffix = &stem[last_underscore + 1..];
-        if let Ok(size) = suffix.parse::<i32>() {
+        if let Ok(size) = suffix.parse::<u8>() {
             return (stem[..last_underscore].to_string(), Some(size));
         }
     }
@@ -80,7 +85,7 @@ pub fn generate_sprite_metadata(
     odin_code.push_str("// This package contains all of the auto-generated data at build-time. Currently it stores:\n");
     odin_code.push_str("// - **Sprite data:** Assigns **atlas UV** and **image size in pixels** to every **PNG** image from **assets/images**.\n");
     odin_code.push_str("//   Manages animation and tileset data. More information on that topic can be found [here](`https://bonsai-framework.dev/reference/core/render/#overview`).\n");
-    odin_code.push_str("// - **Font data:** Grabs **TTF** files present in the `assets/fonts` directory, generates bitmap using the [`stb`](`https://github.com/nothings/stb`) library.\n");
+    odin_code.push_str("// - **Font data:** Grabs **TTF/OTF** files present in the `assets/fonts` directory, generates bitmap using the [`stb`](`https://github.com/nothings/stb`) library.\n");
     odin_code.push_str(
         "//   Makes the fonts easily accessible with the [`FontName`](#fontname) enum.\n",
     );
@@ -246,7 +251,7 @@ pub fn generate_empty_sprite_metadata() -> Result<(), CustomError> {
     odin_code.push_str("// This package contains all of the auto-generated data at build-time. Currently it stores:\n");
     odin_code.push_str("// - **Sprite data:** Assigns **atlas UV** and **image size in pixels** to every **PNG** image from **assets/images**.\n");
     odin_code.push_str("//   Manages animation and tileset data. More information on that topic can be found [here](`https://bonsai-framework.dev/reference/core/render/#overview`).\n");
-    odin_code.push_str("// - **Font data:** Grabs **TTF** files present in the `assets/fonts` directory, generates bitmap using the [`stb`](`https://github.com/nothings/stb`) library.\n");
+    odin_code.push_str("// - **Font data:** Grabs **TTF/OTF** files present in the `assets/fonts` directory, generates bitmap using the [`stb`](`https://github.com/nothings/stb`) library.\n");
     odin_code.push_str(
         "//   Makes the fonts easily accessible with the [`FontName`](#fontname) enum.\n",
     );
@@ -280,7 +285,130 @@ pub fn generate_empty_sprite_metadata() -> Result<(), CustomError> {
     Ok(())
 }
 
-pub fn generate_assets() -> Result<(), CustomError> {
+pub fn generate_font_metadata(
+    packer: &TexturePacker<image::RgbaImage, String>,
+    width: u32,
+    height: u32,
+    is_pixel: bool,
+    native_size: u8,
+    metrics_map: &HashMap<char, GlyphMetrics>,
+) -> Result<Vec<u8>, CustomError> {
+    let mut bin_data = Vec::new();
+
+    bin_data.push(if is_pixel { 1 } else { 0 });
+    bin_data.push(native_size);
+
+    for c in 32..127u8 {
+        let ch = c as char;
+        let key = ch.to_string();
+
+        if let Some(frame) = packer.get_frame(&key) {
+            let metrics = metrics_map.get(&ch).unwrap_or(&GlyphMetrics {
+                x_offset: 0.0, y_offset: 0.0, advance: 0.0
+            });
+
+            let x = frame.frame.x as f32;
+            let y = frame.frame.y as f32;
+            let w = frame.frame.w as f32;
+            let h = frame.frame.h as f32;
+
+            let u0 = x / width as f32;
+            let v0 = y / height as f32;
+            let u1 = (x + w) / width as f32;
+            let v1 = (y + h) / height as f32;
+
+            bin_data.extend_from_slice(&(c as u32).to_le_bytes());
+
+            bin_data.extend_from_slice(&u0.to_le_bytes());
+            bin_data.extend_from_slice(&v0.to_le_bytes());
+            bin_data.extend_from_slice(&u1.to_le_bytes());
+            bin_data.extend_from_slice(&v1.to_le_bytes());
+
+            bin_data.extend_from_slice(&w.to_le_bytes());
+            bin_data.extend_from_slice(&h.to_le_bytes());
+
+            bin_data.extend_from_slice(&metrics.x_offset.to_le_bytes());
+            bin_data.extend_from_slice(&metrics.y_offset.to_le_bytes());
+            bin_data.extend_from_slice(&metrics.advance.to_le_bytes());
+        }
+    }
+
+    Ok(bin_data)
+}
+
+fn build_fonts(font_assets_dir: &Path, font_output_dir: &Path, ui: &Ui) {
+    if font_assets_dir.exists() {
+        if let Ok(entries) = std::fs::read_dir(&font_assets_dir) {
+            for entry in entries.flatten() {
+                let path = entry.path();
+                if let Some(ext) = path.extension() {
+                    if ext == "ttf" || ext == "otf" {
+                        let raw_stem = path.file_stem().and_then(|s| s.to_str()).unwrap_or("unknown");
+                        let clean_stem = raw_stem.replace("-", "_").replace(" ", "_");
+                        let (final_name, native_size_opt) = parse_font_stem(&clean_stem);
+
+                        let is_pixel = native_size_opt.is_some();
+                        let native_size = native_size_opt.unwrap_or(0);
+
+                        if let Err(e) = pack_font(&path, &final_name, is_pixel, native_size, &font_output_dir, ui) {
+                            ui.error(&format!("Failed to pack font at build time: {}", e));
+                        }
+                    }
+                }
+            }
+        }
+    } else if ui.verbose {
+        ui.log("No fonts directory found, skipping build-time font packing.");
+    }
+}
+
+pub fn detect_native_size(font_bytes: &[u8], font_name: &str, ui: &Ui) {
+    if ui.verbose {
+        ui.status(&format!("Analyzing {} to find true pixel size...", font_name));
+    }
+
+    let font = match fontdue::Font::from_bytes(font_bytes, FontSettings::default()) {
+        Ok(f) => f,
+        Err(_) => {
+            ui.error("Failed to parse font for size detection.");
+            return;
+        }
+    };
+
+    let mut found_sizes = Vec::new();
+
+    for test_size in 8..=64u8 {
+        let (metrics, bitmap) = font.rasterize('@', test_size as f32);
+
+        if metrics.width == 0 || metrics.height == 0 { continue; }
+
+        let mut is_blurry = false;
+
+        for &alpha in &bitmap {
+            if alpha > 0 && alpha < 255 {
+                is_blurry = true;
+                break;
+            }
+        }
+
+        if !is_blurry {
+            found_sizes.push(test_size);
+            if ui.verbose {
+                ui.log(&format!("Size for font {} found: {}px", font_name, test_size));
+            }
+        }
+    }
+
+    if found_sizes.is_empty() {
+        ui.log(&format!("No perfect pixel size found for {}.", font_name));
+    } else {
+        ui.log(&format!("Recommendation: Rename your file to {}_{}.ttf/otf", font_name, found_sizes[0]));
+    }
+}
+
+pub fn generate_assets(ui: &Ui) -> Result<(), CustomError> {
+    build_fonts(Path::new(FONT_SRC_DIR), Path::new(FONT_DATA_OUT_DIR), ui);
+    build_fonts(Path::new(ADDITIONAL_FONT_DIR), Path::new(FONT_DATA_OUT_DIR), ui);
     generate_asset_metadata(
         FONT_SRC_DIR,
         FONT_OUT_DIR,
@@ -320,7 +448,7 @@ fn generate_asset_metadata(
     let asset_dir = Path::new(asset_src);
     let output_file = Path::new(asset_out);
 
-    let mut entries: Vec<(String, String, Option<i32>)> = vec![];
+    let mut entries: Vec<(String, String, Option<u8>)> = vec![];
 
     if asset_dir.exists() {
         for entry in fs::read_dir(asset_dir)? {
@@ -334,7 +462,17 @@ fn generate_asset_metadata(
                 AssetSearchMode::Directories => path.is_dir(),
             };
 
-            if is_match {
+            let mut is_match_second = false;
+            if enum_name == "Font" {
+                is_match_second = match AssetSearchMode::ByExtension("otf") {
+                    AssetSearchMode::ByExtension(ext) => {
+                        path.is_file() && path.extension().and_then(|s| s.to_str()) == Some(ext)
+                    }
+                    AssetSearchMode::Directories => path.is_dir(),
+                };
+            }
+
+            if is_match || is_match_second {
                 if let Some(stem_os) = path.file_stem() {
                     if let (Some(stem), Some(path_str)) = (stem_os.to_str(), path.to_str()) {
                         let mut clean_stem = stem.replace("-", "_").replace(" ", "_");
@@ -353,13 +491,13 @@ fn generate_asset_metadata(
         }
     }
 
-    let mut additional_size = None;
-    if !additional_asset_filename.is_empty() && enum_name == "Font" {
-        if let Some(stem) = Path::new(additional_asset_filename).file_stem().and_then(|s| s.to_str()) {
-            let (_, extracted_size) = parse_font_stem(stem);
-            additional_size = extracted_size;
-        }
-    }
+    // let mut additional_size = None;
+    // if !additional_asset_filename.is_empty() && enum_name == "Font" {
+    //     if let Some(stem) = Path::new(additional_asset_filename).file_stem().and_then(|s| s.to_str()) {
+    //         let (_, extracted_size) = parse_font_stem(stem);
+    //         additional_size = extracted_size;
+    //     }
+    // }
 
     let mut odin_code = String::new();
 
@@ -403,30 +541,6 @@ fn generate_asset_metadata(
         for (name, file, _) in &entries {
             odin_code.push_str(&format!("\t.{} = \"{}\",\n", name, file));
         }
-        odin_code.push_str("}\n");
-    }
-
-    if enum_name == "Font" {
-        odin_code.push_str("\n// @ref\n");
-        odin_code.push_str("// Returns the native size of the font parsed from its filename.\n");
-        odin_code.push_str("// Returns 0 if no size is specified.\n");
-        odin_code.push_str("getFontNativeSize :: proc(font: FontName) -> uint {\n");
-        odin_code.push_str("\t#partial switch font {\n");
-        
-        if !additional_asset_enum.is_empty() {
-            if let Some(size) = additional_size {
-                odin_code.push_str(&format!("\tcase .{}: return {}\n", additional_asset_enum, size));
-            }
-        }
-
-        for (name, _, size_opt) in &entries {
-            if let Some(size) = size_opt {
-                odin_code.push_str(&format!("\tcase .{}: return {}\n", name, size));
-            }
-        }
-
-        odin_code.push_str("\t}\n");
-        odin_code.push_str("\treturn 0\n");
         odin_code.push_str("}\n");
     }
 

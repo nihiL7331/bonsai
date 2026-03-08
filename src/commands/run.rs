@@ -11,11 +11,14 @@ use std::process::{Command, Stdio};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{mpsc, Arc};
 use std::thread;
-use std::time::{Instant, Duration};
-use crate::packer::pack_atlas;
+use std::time::{Instant, Duration, SystemTime};
+use crate::packer::{pack_atlas, pack_font};
+use crate::assets::parse_font_stem;
+use std::collections::HashMap;
 
-const ASSETS_IMAGES_DIR: &str = "assets";
+const ASSETS_DIR: &str = "assets";
 const ATLAS_DIR: &str = "bonsai/core/render/atlas";
+const FONT_DIR: &str = ".bonsai/cache/fonts";
 
 #[derive(Args)]
 pub struct RunArgs {
@@ -64,7 +67,7 @@ pub fn run(args: &RunArgs, ui: Ui) -> Result<(), CustomError> {
     }
 
     let ws_port = args.port + 1;
-    let watch_dir = project_dir.join(ASSETS_IMAGES_DIR);
+    let watch_dir = project_dir.join(ASSETS_DIR);
     spawn_hot_reloader(&ui, ws_port, watch_dir, args.web);
 
     if args.web {
@@ -99,45 +102,102 @@ fn spawn_hot_reloader(ui: &Ui, ws_port: u16, target_dir: PathBuf, is_web: bool) 
 
         ui_clone.status("Hot reloader waiting for asset changes...");
 
-        let mut last_repack_time = Instant::now() - Duration::from_secs(10);
+        let mut last_repack_time_atlas = Instant::now() - Duration::from_secs(10);
+        let mut last_repack_time_font = Instant::now() - Duration::from_secs(10);
         let cooldown_duration = Duration::from_millis(1000);
+
+        let mut known_mod_times: HashMap<PathBuf, SystemTime> = HashMap::new();
 
         for result in debounce_rx {
             if let Ok(events) = result {
-                let mut should_repack = false;
+                let mut should_repack_atlas = false;
+                let mut should_repack_font = false;
+                let mut changed_font_path = None;
+
                 for event in events {
+                    if event.path.components().any(|c| c.as_os_str() == ".bonsai") {
+                        continue;
+                    }
+
                     if let Some(ext) = event.path.extension() {
                         if ext == "png" {
-                            should_repack = true;
+                            should_repack_atlas = true;
+                        } else if ext == "ttf" || ext == "otf" {
+                            should_repack_font = true;
+                            changed_font_path = Some(event.path.clone());
                         }
                     }
                 }
 
-                if should_repack {
-                    if last_repack_time.elapsed() < cooldown_duration {
-                        continue;
-                    }
+                if should_repack_atlas {
+                    if last_repack_time_atlas.elapsed() >= cooldown_duration {
+                        last_repack_time_atlas = Instant::now();
 
-                    last_repack_time = Instant::now();
+                        ui_clone.status("Repacking atlas...");
+                        let atlas_output_dir = Path::new(ATLAS_DIR);
 
-                    ui_clone.status("Repacking atlas...");
+                        match pack_atlas(&target_dir, &atlas_output_dir, &ui_clone) {
+                            Ok(Some(payload)) => {
+                                let mut ws_binary = Vec::new();
 
-                    let atlas_output_dir = Path::new(ATLAS_DIR);
+                                ws_binary.push(0);
 
-                    match pack_atlas(&target_dir, &atlas_output_dir, &ui_clone) {
-                        Ok(Some(payload)) => {
-                            let mut ws_binary = Vec::new();
+                                let bin_len = payload.metadata_bin.len() as u32;
 
-                            let bin_len = payload.metadata_bin.len() as u32;
+                                ws_binary.extend_from_slice(&bin_len.to_le_bytes());
+                                ws_binary.extend_from_slice(&payload.metadata_bin);
+                                ws_binary.extend_from_slice(&payload.png_bytes);
 
-                            ws_binary.extend_from_slice(&bin_len.to_le_bytes());
-                            ws_binary.extend_from_slice(&payload.metadata_bin);
-                            ws_binary.extend_from_slice(&payload.png_bytes);
-
-                            let _ = tx.send(ws_binary);
+                                let _ = tx.send(ws_binary);
+                            }
+                            Ok(None) => {}
+                            Err(e) => ui_clone.error(&format!("Packer failed: {}", e)),
                         }
-                        Ok(None) => {}
-                        Err(e) => ui_clone.error(&format!("Packer failed: {}", e)),
+                    }
+                } 
+                if should_repack_font {
+                    if let Some(font_path) = changed_font_path {
+                        if let Ok(meta) = std::fs::metadata(&font_path) {
+                            if let Ok(mtime) = meta.modified() {
+                                if known_mod_times.get(&font_path) == Some(&mtime) {
+                                    continue;
+                                }
+                                known_mod_times.insert(font_path.clone(), mtime);
+                            }
+                        }
+                        if last_repack_time_font.elapsed() >= cooldown_duration {
+                            last_repack_time_font = Instant::now();
+
+                            let raw_stem = font_path.file_stem().and_then(|s| s.to_str()).unwrap_or("unknown");
+                            let clean_stem = raw_stem.replace("-", "_").replace(" ", "_");
+                            let (final_name, native_size_opt) = parse_font_stem(&clean_stem);
+                            let is_pixel = native_size_opt.is_some();
+                            let native_size = native_size_opt.unwrap_or(0);
+
+                            ui_clone.status(&format!("Repacking font: {:?}...", font_path.file_name().unwrap()));
+                            let font_output_dir = Path::new(FONT_DIR);
+
+                            match pack_font(&font_path, &final_name, is_pixel, native_size, &font_output_dir, &ui_clone) {
+                                Ok(Some(payload)) => {
+                                    let mut ws_binary = Vec::new();
+
+                                    ws_binary.push(1); // packet id
+
+                                    let name_bytes = final_name.as_bytes();
+                                    ws_binary.push(name_bytes.len() as u8);
+                                    ws_binary.extend_from_slice(name_bytes);
+
+                                    let bin_len = payload.metadata_bin.len() as u32;
+                                    ws_binary.extend_from_slice(&bin_len.to_le_bytes());
+                                    ws_binary.extend_from_slice(&payload.metadata_bin);
+                                    ws_binary.extend_from_slice(&payload.png_bytes);
+
+                                    let _ = tx.send(ws_binary);
+                                }
+                                Ok(None) => {}
+                                Err(e) => ui_clone.error(&format!("font packing failed: {}", e)),
+                            }
+                        }
                     }
                 }
             }

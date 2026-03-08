@@ -51,8 +51,9 @@ const EMSCRIPTEN_FLAGS: &str = "-sWASM_BIGINT \
 --preload-file bonsai/core/render/atlas \
 --preload-file assets/audio \
 --preload-file assets/fonts \
---preload-file bonsai/core/ui/PixelCode_12.ttf \
---preload-file .bonsai/cache/sprites/sprites.bin";
+--preload-file bonsai/core/render/PixelCode_9.ttf \
+--preload-file .bonsai/cache/sprites/sprites.bin \
+--preload-file .bonsai/cache/fonts";
 
 pub struct BuildResult {
     pub executable_path: PathBuf,
@@ -66,7 +67,7 @@ fn prepare_resources(ui: &Ui) -> Result<(), CustomError> {
     run_utils(ui)?;
     update_manifest(Path::new("."), ui)?;
     pack_atlas(Path::new(ASSETS_DIR), Path::new(ATLAS_DIR), ui)?;
-    generate_assets()?;
+    generate_assets(ui)?;
     compile_shaders(ui)?;
     Ok(())
 }

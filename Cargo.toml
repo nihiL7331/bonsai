@@ -1,6 +1,6 @@
 [package]
 name = "bonsai-cli"
-version = "0.2.1"
+version = "0.2.2"
 edition = "2024"
 authors = ["Patryk Pujanek"]
 description = "CLI for the bonsai 2D game framework."
@@ -19,8 +19,10 @@ colored = "3.0.0"
 ctrlc = "3.5.1"
 dirs = "6.0.0"
 enable-ansi-support = "0.3.1"
+fontdue = "0.9.3"
 image = { version = "0.25.9", default-features = false, features = ["png"] }
 indicatif = "0.18.3"
+msdfgen = { version = "0.2.1", features = ["ttf-parser"] }
 notify = "8.2.0"
 notify-debouncer-mini = "0.7.0"
 rayon = "1.11.0"
@@ -34,6 +36,7 @@ tempfile = "3.24.0"
 texture_packer = "0.30.0"
 thiserror = "2.0.17"
 toml_edit = { version = "0.24.0", features = ["serde"] }
+ttf-parser = "0.18.0"
 tungstenite = "0.28.0"
 ureq = { version = "3.1.4", features = ["platform-verifier"] }
 url = "2.5.7"
