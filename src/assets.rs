@@ -32,8 +32,8 @@ const FONT_SRC_DIR: &str = "assets/fonts";
 const FONT_OUT_DIR: &str = "bonsai/generated/font.odin";
 const FONT_DATA_OUT_DIR: &str = ".bonsai/cache/fonts";
 const ADDITIONAL_FONT_ENUM: &str = "PixelCode";
-const ADDITIONAL_FONT_FILENAME: &str = "bonsai/core/ui/PixelCode_12.ttf";
-const ADDITIONAL_FONT_DIR: &str = "bonsai/core/ui";
+const ADDITIONAL_FONT_FILENAME: &str = "bonsai/core/render/PixelCode_9.ttf";
+const ADDITIONAL_FONT_DIR: &str = "bonsai/core/render";
 //audio
 const AUDIO_SRC_DIR: &str = "assets/audio";
 const AUDIO_OUT_DIR: &str = "bonsai/generated/audio.odin";
